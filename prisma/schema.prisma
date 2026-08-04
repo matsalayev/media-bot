@@ -17,6 +17,7 @@ model User {
   firstName    String?
   languageCode String?
   lang         String? // tanlangan interfeys tili: uz | ru | en
+  tonWallet    String? // creator payout uchun TON hamyon manzili (USDT shu yerga tushadi)
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
@@ -35,7 +36,8 @@ model Content {
   reelUrl         String? // qisqa REELS videoning AWS S3 (yoki CDN) URL'i — Mini App'da stream qilinadi
   reelFileId      String? // fallback: reel Telegram file_id (S3 sozlanmagan bo'lsa)
   videoFileId     String? // TO'LIQ videoning file_id'si (yopiq storage kanalda; unlock'da chatga yuboriladi)
-  priceStars      Int      @default(0) // 0 = bepul, >0 = Stars evaziga ochiladi
+  priceUsdt       Float    @default(0) // creator belgilagan narx (USDT); 0 = bepul
+  priceStars      Int      @default(0) // USDT'dan hisoblangan Stars (invoice uchun; user shuni to'laydi)
   status          String   @default("draft") // draft | pending | published | rejected
   rejectionReason String?
   creatorId       Int?
@@ -59,8 +61,10 @@ model Unlock {
   contentId     Int
   source        String   @default("stars") // stars | free
   starsPaid     Int      @default(0)
-  creatorEarned Int      @default(0) // creator ulushi (Stars)
-  platformFee   Int      @default(0) // platforma komissiyasi (Stars)
+  creatorEarned Int      @default(0) // (legacy) creator ulushi (Stars)
+  platformFee   Int      @default(0) // (legacy) platforma komissiyasi (Stars)
+  creatorEarnedUsdt Float @default(0) // creator ulushi (USDT) — balans shu bo'yicha
+  platformFeeUsdt   Float @default(0) // platforma komissiyasi (USDT)
   chargeId      String? // telegram_payment_charge_id (refund uchun)
   createdAt     DateTime @default(now())
 
@@ -107,8 +111,11 @@ model View {
 model Payout {
   id          Int      @id @default(autoincrement())
   userId      Int
-  amountStars Int
-  status      String   @default("requested") // requested | paid | rejected
+  amountStars Int      @default(0) // (legacy)
+  amountUsdt  Float    @default(0) // yechilgan USDT
+  toAddress   String? // creator TON manzili
+  tonTxHash   String? // TON tranzaksiya hash'i
+  status      String   @default("requested") // processing | paid | failed | requested | rejected
   note        String?
   createdAt   DateTime @default(now())
 

@@ -8,7 +8,8 @@ import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
-import { bot, deliverContent, createStarsInvoiceLink, creatorBalance, requestPayout, createContent } from "./bot";
+import { bot, deliverContent, createStarsInvoiceLink, creatorBalance, requestPayout, createContent, setTonWallet } from "./bot";
+import { tonEnabled } from "./ton";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
 
@@ -189,10 +190,10 @@ export function buildServer() {
     const list = await prisma.content.findMany({ where: { creatorId: user.id }, orderBy: { id: "desc" }, take: 50 });
     const earned = await prisma.unlock.groupBy({
       by: ["contentId"],
-      _sum: { creatorEarned: true },
+      _sum: { creatorEarnedUsdt: true },
       where: { content: { creatorId: user.id } },
     });
-    const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarned ?? 0]));
+    const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarnedUsdt ?? 0]));
     const savedRows = await prisma.savedItem.findMany({
       where: { userId: user.id },
       include: { content: true },
@@ -209,8 +210,10 @@ export function buildServer() {
       lang: normLang(user.lang),
       user: { firstName: user.firstName, username: user.username },
       balance: bal,
-      minWithdraw: config.minWithdrawStars,
+      minWithdraw: config.minWithdrawUsdt,
       creatorShare: config.creatorSharePercent,
+      tonWallet: user.tonWallet ?? "",
+      payoutEnabled: tonEnabled(),
       content: list.map((c) => ({
         id: c.id,
         title: c.title,
@@ -225,11 +228,22 @@ export function buildServer() {
     };
   });
 
-  // ---- Payout so'rovi ----
+  // ---- TON hamyon manzilini saqlash ----
+  app.post("/api/wallet", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const address = String((req.body as { address?: string })?.address ?? "").trim();
+    if (!address) return reply.code(400).send({ error: "address required" });
+    const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    return setTonWallet(tg.id, address, u?.lang ?? undefined);
+  });
+
+  // ---- Payout (avtomatik USDT → TON hamyon) ----
   app.post("/api/withdraw", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    return requestPayout(tg.id);
+    const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    return requestPayout(tg.id, u?.lang ?? undefined);
   });
 
   // ---- Video yuklash (Mini App, multipart) ----
@@ -245,7 +259,7 @@ export function buildServer() {
     }
     if (!files.reel || !files.video) return reply.code(400).send({ error: "reel va to'liq video kerak" });
     const title = (fields.title ?? "").trim();
-    const price = Math.max(0, parseInt(fields.price ?? "0", 10) || 0);
+    const price = Math.max(0, parseFloat(String(fields.price ?? "0").replace(",", ".")) || 0); // USDT
     if (!title) return reply.code(400).send({ error: "sarlavha kerak" });
 
     try {

@@ -24,9 +24,9 @@ const S: Record<string, Entry> = {
   },
   openApp: { uz: "🎬 Ochish", ru: "🎬 Открыть", en: "🎬 Open" },
   help: {
-    uz: "🎬 Menyudagi «Media» tugmasi orqali ilovani oching.\n\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromadim\n/withdraw — balansni yechish\n/lang — tilni o'zgartirish",
-    ru: "🎬 Откройте приложение кнопкой «Media» в меню.\n\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — мой доход\n/withdraw — вывод баланса\n/lang — сменить язык",
-    en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings\n/withdraw — withdraw balance\n/lang — change language",
+    uz: "🎬 Menyudagi «Media» tugmasi orqali ilovani oching.\n\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromadim (USDT)\n/wallet — TON hamyonni ulash\n/withdraw — USDT'ni hamyonga yechish\n/lang — tilni o'zgartirish",
+    ru: "🎬 Откройте приложение кнопкой «Media» в меню.\n\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — мой доход (USDT)\n/wallet — привязать TON кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык",
+    en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings (USDT)\n/wallet — link TON wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language",
   },
   uploadStart: {
     uz: "🎬 Yangi video.\n\n1/3 — Qisqa REELS videoni (vertikal) yuboring.\n\nBekor qilish: /cancel",
@@ -39,9 +39,9 @@ const S: Record<string, Entry> = {
     en: "2/3 — Now send the FULL video.",
   },
   uploadMeta: {
-    uz: "3/3 — Sarlavha va narxni yuboring:\nSarlavha | narx\nMasalan:  Qiziqarli video | 50   (0 = bepul)",
-    ru: "3/3 — Отправьте название и цену:\nНазвание | цена\nНапример:  Интересное видео | 50   (0 = бесплатно)",
-    en: "3/3 — Send title and price:\nTitle | price\nE.g.:  Cool video | 50   (0 = free)",
+    uz: "3/3 — Sarlavha va narxni (USDT) yuboring:\nSarlavha | narx\nMasalan:  Qiziqarli video | 1.5   (0 = bepul)",
+    ru: "3/3 — Отправьте название и цену (USDT):\nНазвание | цена\nНапример:  Интересное видео | 1.5   (0 = бесплатно)",
+    en: "3/3 — Send title and price (USDT):\nTitle | price\nE.g.:  Cool video | 1.5   (0 = free)",
   },
   saving: { uz: "⏳ Saqlanmoqda…", ru: "⏳ Сохранение…", en: "⏳ Saving…" },
   published: {
@@ -72,19 +72,69 @@ const S: Record<string, Entry> = {
     en: "You have no content yet. Upload via /upload.",
   },
   earnings: {
-    uz: "💰 Daromadingiz\n\nJami ishlangan: {earned} ⭐\nYechilgan/so'ralgan: {reserved} ⭐\nMavjud balans: {available} ⭐\n\nYechish: /withdraw (min {min} ⭐)\nUlush: siz {share}%, platforma {plat}%",
-    ru: "💰 Ваш доход\n\nВсего заработано: {earned} ⭐\nВыведено/в запросе: {reserved} ⭐\nДоступно: {available} ⭐\n\nВывод: /withdraw (мин {min} ⭐)\nДоля: вы {share}%, платформа {plat}%",
-    en: "💰 Your earnings\n\nTotal earned: {earned} ⭐\nWithdrawn/requested: {reserved} ⭐\nAvailable: {available} ⭐\n\nWithdraw: /withdraw (min {min} ⭐)\nShare: you {share}%, platform {plat}%",
+    uz: "💰 Daromadingiz\n\nJami ishlangan: {earned} USDT\nYechilgan/jarayonda: {reserved} USDT\nMavjud: {available} USDT\n\nTON hamyon: {wallet}\nUlush: siz {share}%, platforma {plat}%\n\nYechish: /withdraw (min {min} USDT)\nHamyonni ulash: /wallet <manzil>",
+    ru: "💰 Ваш доход\n\nВсего заработано: {earned} USDT\nВыведено/в процессе: {reserved} USDT\nДоступно: {available} USDT\n\nTON кошелёк: {wallet}\nДоля: вы {share}%, платформа {plat}%\n\nВывод: /withdraw (мин {min} USDT)\nПривязать кошелёк: /wallet <адрес>",
+    en: "💰 Your earnings\n\nTotal earned: {earned} USDT\nWithdrawn/in progress: {reserved} USDT\nAvailable: {available} USDT\n\nTON wallet: {wallet}\nShare: you {share}%, platform {plat}%\n\nWithdraw: /withdraw (min {min} USDT)\nLink wallet: /wallet <address>",
   },
   withdrawMin: {
-    uz: "Yechish uchun kamida {min} ⭐ kerak. Mavjud: {available} ⭐",
-    ru: "Для вывода нужно минимум {min} ⭐. Доступно: {available} ⭐",
-    en: "Minimum {min} ⭐ required to withdraw. Available: {available} ⭐",
+    uz: "Yechish uchun kamida {min} USDT kerak. Mavjud: {available} USDT",
+    ru: "Для вывода нужно минимум {min} USDT. Доступно: {available} USDT",
+    en: "Minimum {min} USDT required to withdraw. Available: {available} USDT",
   },
-  withdrawOk: {
-    uz: "✅ {amount} ⭐ yechish so'rovi qabul qilindi (#{id}). Admin ko'rib chiqadi.",
-    ru: "✅ Запрос на вывод {amount} ⭐ принят (#{id}). Админ рассмотрит.",
-    en: "✅ Withdrawal request for {amount} ⭐ accepted (#{id}). Admin will review.",
+  needWallet: {
+    uz: "Avval TON hamyon manzilingizni ulang:\n/wallet <manzil>\n(yoki ilova profilidan)",
+    ru: "Сначала привяжите адрес TON кошелька:\n/wallet <адрес>\n(или в профиле приложения)",
+    en: "First link your TON wallet address:\n/wallet <address>\n(or in the app profile)",
+  },
+  walletPrompt: {
+    uz: "TON hamyoningizni ulang (USDT shu manzilga tushadi):\n/wallet <manzil>\n\n{current}",
+    ru: "Привяжите TON кошелёк (USDT придёт на этот адрес):\n/wallet <адрес>\n\n{current}",
+    en: "Link your TON wallet (USDT arrives to this address):\n/wallet <address>\n\n{current}",
+  },
+  walletCurrent: {
+    uz: "Joriy: {addr}",
+    ru: "Текущий: {addr}",
+    en: "Current: {addr}",
+  },
+  walletSaved: {
+    uz: "✅ TON hamyon saqlandi:\n{addr}",
+    ru: "✅ TON кошелёк сохранён:\n{addr}",
+    en: "✅ TON wallet saved:\n{addr}",
+  },
+  walletInvalid: {
+    uz: "❌ Noto'g'ri TON manzil. Tonkeeper'dan to'liq manzilni nusxalang.",
+    ru: "❌ Неверный TON адрес. Скопируйте полный адрес из Tonkeeper.",
+    en: "❌ Invalid TON address. Copy the full address from Tonkeeper.",
+  },
+  payoutPending: {
+    uz: "⏳ Oldingi yechish so'rovingiz hali jarayonda. Biroz kuting.",
+    ru: "⏳ Ваш предыдущий вывод ещё обрабатывается. Подождите немного.",
+    en: "⏳ Your previous withdrawal is still processing. Please wait.",
+  },
+  payoutOffline: {
+    uz: "⚙️ Payout hozircha sozlanmoqda. Keyinroq urinib ko'ring.",
+    ru: "⚙️ Выплаты пока настраиваются. Попробуйте позже.",
+    en: "⚙️ Payouts are being set up. Please try again later.",
+  },
+  payoutNoLiquidity: {
+    uz: "⏳ Hozircha yechib bo'lmadi (texnik sabab). Tez orada hal bo'ladi.",
+    ru: "⏳ Вывод временно недоступен (техническая причина). Скоро исправим.",
+    en: "⏳ Withdrawal is temporarily unavailable (technical). It'll be fixed soon.",
+  },
+  withdrawPaid: {
+    uz: "✅ {amount} USDT hamyoningizga yuborildi:\n{addr}",
+    ru: "✅ {amount} USDT отправлено на ваш кошелёк:\n{addr}",
+    en: "✅ {amount} USDT sent to your wallet:\n{addr}",
+  },
+  withdrawProcessing: {
+    uz: "⏳ {amount} USDT yuborildi, tarmoq tasdig'i kutilmoqda.",
+    ru: "⏳ {amount} USDT отправлено, ожидается подтверждение сети.",
+    en: "⏳ {amount} USDT sent, awaiting network confirmation.",
+  },
+  withdrawFailed: {
+    uz: "❌ Yechishda xatolik yuz berdi. Admin xabardor qilindi.",
+    ru: "❌ Ошибка при выводе. Администратор уведомлён.",
+    en: "❌ Withdrawal failed. The admin has been notified.",
   },
 };
 

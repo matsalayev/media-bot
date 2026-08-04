@@ -4,6 +4,8 @@ import { config, assertBotConfig } from "./config";
 import { prisma } from "./db";
 import { s3Enabled, putReelToS3, publicUrlFor } from "./storage";
 import { t, normLang, Lang } from "./i18n";
+import { usdtToStars, starsToUsdt, fmtUsd } from "./pricing";
+import { tonEnabled, sendUsdt, parseTonAddress, getHotWalletInfo } from "./ton";
 
 interface Draft {
   reelFileId?: string;
@@ -59,17 +61,18 @@ async function sendWelcome(ctx: MyContext, lang: Lang) {
   await ctx.reply(t(lang, "welcome"), { reply_markup: kb });
 }
 
+/** Creator balansi — USDT'da (jami ishlangan, band qilingan, mavjud). */
 export async function creatorBalance(
   creatorUserId: number,
 ): Promise<{ earned: number; reserved: number; available: number }> {
-  const agg = await prisma.unlock.aggregate({ _sum: { creatorEarned: true }, where: { content: { creatorId: creatorUserId } } });
-  const earned = agg._sum.creatorEarned ?? 0;
+  const agg = await prisma.unlock.aggregate({ _sum: { creatorEarnedUsdt: true }, where: { content: { creatorId: creatorUserId } } });
+  const earned = agg._sum.creatorEarnedUsdt ?? 0;
   const paid = await prisma.payout.aggregate({
-    _sum: { amountStars: true },
-    where: { userId: creatorUserId, status: { in: ["requested", "paid"] } },
+    _sum: { amountUsdt: true },
+    where: { userId: creatorUserId, status: { in: ["requested", "processing", "paid"] } },
   });
-  const reserved = paid._sum.amountStars ?? 0;
-  return { earned, reserved, available: earned - reserved };
+  const reserved = paid._sum.amountUsdt ?? 0;
+  return { earned, reserved, available: Math.max(0, earned - reserved) };
 }
 
 // ---------------- Storage (S3 reels + Telegram to'liq video) ----------------
@@ -117,13 +120,13 @@ async function storeFullVideo(source: { buffer?: Buffer; fileId?: string }): Pro
   return null;
 }
 
-/** Yagona kontent yaratish (bot va Mini App API uchun). Auto-publish. */
+/** Yagona kontent yaratish (bot va Mini App API uchun). Narx USDT'da; Stars invoice uchun hisoblanadi. Auto-publish. */
 export async function createContent(
   uploaderTelegramId: string,
   reel: { buffer?: Buffer; fileId?: string },
   video: { buffer?: Buffer; fileId?: string },
   title: string,
-  price: number,
+  priceUsdt: number,
 ) {
   const { reelUrl, reelFileId } = await storeReel(reel);
   const videoFileId = await storeFullVideo(video);
@@ -132,8 +135,9 @@ export async function createContent(
     update: {},
     create: { telegramId: uploaderTelegramId, isAdmin: isAdmin(uploaderTelegramId) },
   });
+  const priceStars = usdtToStars(priceUsdt);
   return prisma.content.create({
-    data: { title, reelUrl, reelFileId, videoFileId, priceStars: price, status: "published", creatorId: creator.id },
+    data: { title, reelUrl, reelFileId, videoFileId, priceUsdt, priceStars, status: "published", creatorId: creator.id },
   });
 }
 
@@ -151,14 +155,19 @@ export async function deliverContent(
 
   let creatorEarned = 0;
   let platformFee = 0;
+  let creatorEarnedUsdt = 0;
+  let platformFeeUsdt = 0;
   if (source === "stars" && starsPaid > 0) {
     creatorEarned = Math.floor((starsPaid * config.creatorSharePercent) / 100);
     platformFee = starsPaid - creatorEarned;
+    const usd = starsToUsdt(starsPaid);
+    creatorEarnedUsdt = (usd * config.creatorSharePercent) / 100;
+    platformFeeUsdt = usd - creatorEarnedUsdt;
   }
   await prisma.unlock.upsert({
     where: { userId_contentId: { userId: user.id, contentId } },
     update: {},
-    create: { userId: user.id, contentId, source, starsPaid, creatorEarned, platformFee, chargeId },
+    create: { userId: user.id, contentId, source, starsPaid, creatorEarned, platformFee, creatorEarnedUsdt, platformFeeUsdt, chargeId },
   });
   await prisma.content.update({ where: { id: contentId }, data: { unlockCount: { increment: 1 } } });
   await bot.api.sendVideo(telegramId, content.videoFileId, { caption: `🎬 ${content.title}`, supports_streaming: true });
@@ -174,6 +183,31 @@ export async function createStarsInvoiceLink(contentId: number, buyerTelegramId:
   ]);
 }
 
+/** Creatorning TON hamyon manzilini saqlaydi (payout USDT shu manzilga tushadi). */
+export async function setTonWallet(
+  telegramId: string,
+  address: string,
+  lang?: string,
+): Promise<{ ok: boolean; message: string; address?: string }> {
+  const l = normLang(lang);
+  let norm: string;
+  try {
+    norm = parseTonAddress(address);
+  } catch {
+    return { ok: false, message: t(l, "walletInvalid") };
+  }
+  await prisma.user.upsert({
+    where: { telegramId },
+    update: { tonWallet: norm },
+    create: { telegramId, tonWallet: norm, isAdmin: isAdmin(telegramId) },
+  });
+  return { ok: true, message: t(l, "walletSaved", { addr: norm }), address: norm };
+}
+
+/**
+ * Avtomatik payout: creatorning mavjud USDT balansini uning TON hamyoniga yuboradi.
+ * 30% komissiya avtomatik platformada qoladi (creator balansi allaqachon 70%).
+ */
 export async function requestPayout(
   telegramId: string,
   lang?: string,
@@ -181,17 +215,51 @@ export async function requestPayout(
   const l = normLang(lang);
   const creator = await prisma.user.findUnique({ where: { telegramId } });
   if (!creator) return { ok: false, message: t(l, "startFirst") };
+  if (!tonEnabled()) return { ok: false, message: t(l, "payoutOffline") };
+  if (!creator.tonWallet) return { ok: false, message: t(l, "needWallet") };
+
+  // Bir vaqtda bitta yechish
+  const pending = await prisma.payout.findFirst({ where: { userId: creator.id, status: "processing" } });
+  if (pending) return { ok: false, message: t(l, "payoutPending") };
+
   const b = await creatorBalance(creator.id);
-  if (b.available < config.minWithdrawStars) {
-    return { ok: false, message: t(l, "withdrawMin", { min: config.minWithdrawStars, available: b.available }) };
+  if (b.available < config.minWithdrawUsdt) {
+    return { ok: false, message: t(l, "withdrawMin", { min: fmtUsd(config.minWithdrawUsdt), available: fmtUsd(b.available) }) };
   }
-  const payout = await prisma.payout.create({ data: { userId: creator.id, amountStars: b.available, status: "requested" } });
-  const kb = new InlineKeyboard().text("✅ To'landi", `payout_paid:${payout.id}`).text("❌ Rad", `payout_reject:${payout.id}`);
-  await notifyAdmins(
-    `💸 Payout so'rovi #${payout.id}\nMuallif: @${creator.username ?? creator.telegramId}\nSumma: ${b.available} ⭐`,
-    kb,
-  );
-  return { ok: true, message: t(l, "withdrawOk", { amount: b.available, id: payout.id }), payoutId: payout.id, amount: b.available };
+  const amount = Math.floor(b.available * 100) / 100; // 2 kasr
+
+  // Hot-wallet likvidligini tekshirish (yetarli USDT + gaz uchun TON)
+  const hw = await getHotWalletInfo().catch(() => null);
+  if (!hw || hw.usdt + 1e-6 < amount || hw.ton < 0.1) {
+    await notifyAdmins(
+      `⚠️ Payout uchun hot-wallet balansi yetarli emas!\nKerak: ${fmtUsd(amount)} USDT\nMavjud: ${hw ? fmtUsd(hw.usdt) + " USDT / " + hw.ton.toFixed(3) + " TON" : "noma'lum"}\n\nHot-wallet'ni to'ldiring: /hotwallet`,
+    );
+    return { ok: false, message: t(l, "payoutNoLiquidity") };
+  }
+
+  // Balansni band qilamiz (processing) — keyin yuboramiz
+  const payout = await prisma.payout.create({
+    data: { userId: creator.id, amountUsdt: amount, toAddress: creator.tonWallet, status: "processing" },
+  });
+  try {
+    const { hash, confirmed } = await sendUsdt(creator.tonWallet, amount);
+    await prisma.payout.update({ where: { id: payout.id }, data: { status: confirmed ? "paid" : "processing", tonTxHash: hash } });
+    if (confirmed) {
+      await notifyAdmins(
+        `✅ Avto-payout #${payout.id}\n@${creator.username ?? creator.telegramId}\n${fmtUsd(amount)} USDT → ${creator.tonWallet}\ntx: ${hash}`,
+      );
+      return { ok: true, message: t(l, "withdrawPaid", { amount: fmtUsd(amount), addr: creator.tonWallet }), payoutId: payout.id, amount };
+    }
+    await notifyAdmins(
+      `⏳ Payout #${payout.id} yuborildi, tasdiq kutilmoqda\n${fmtUsd(amount)} USDT → ${creator.tonWallet}\ntx: ${hash}`,
+    );
+    return { ok: true, message: t(l, "withdrawProcessing", { amount: fmtUsd(amount) }), payoutId: payout.id, amount };
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e).slice(0, 300);
+    await prisma.payout.update({ where: { id: payout.id }, data: { status: "failed", note: msg } });
+    await notifyAdmins(`⚠️ Payout XATO #${payout.id}\n${fmtUsd(amount)} USDT → ${creator.tonWallet}\n${msg}`);
+    return { ok: false, message: t(l, "withdrawFailed") };
+  }
 }
 
 // ==================== Buyruqlar ====================
@@ -269,7 +337,7 @@ bot.on("message:text", async (ctx, next) => {
   const lang = await userLang(String(ctx.from.id));
   const [titleRaw, priceRaw] = ctx.message.text.split("|");
   const title = (titleRaw ?? "").trim();
-  const price = Math.max(0, parseInt((priceRaw ?? "0").trim(), 10) || 0);
+  const price = Math.max(0, parseFloat((priceRaw ?? "0").trim().replace(",", ".")) || 0);
   const d = ctx.session.draft;
   if (!title || !d.reelFileId || !d.videoFileId) return ctx.reply(t(lang, "incomplete"));
   await ctx.reply(t(lang, "saving"));
@@ -277,7 +345,7 @@ bot.on("message:text", async (ctx, next) => {
   ctx.session.step = undefined;
   ctx.session.mode = undefined;
   ctx.session.draft = {};
-  await ctx.reply(t(lang, "published", { title: content.title, price: price === 0 ? t(lang, "free") : price + " ⭐" }));
+  await ctx.reply(t(lang, "published", { title: content.title, price: price === 0 ? t(lang, "free") : fmtUsd(price) + " USDT" }));
 });
 
 // ---------------- Creator: statistika va daromad ----------------
@@ -289,9 +357,9 @@ bot.command("mycontent", async (ctx) => {
   if (!creator) return ctx.reply(t(lang, "startFirst"));
   const list = await prisma.content.findMany({ where: { creatorId: creator.id }, orderBy: { id: "desc" }, take: 20 });
   if (!list.length) return ctx.reply(t(lang, "noContent"));
-  const earned = await prisma.unlock.groupBy({ by: ["contentId"], _sum: { creatorEarned: true }, where: { content: { creatorId: creator.id } } });
-  const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarned ?? 0]));
-  const lines = list.map((c) => `«${c.title}» — 👁 ${c.viewCount} · 🔓 ${c.unlockCount} · ❤️ ${c.likeCount} · 💰 ${em.get(c.id) ?? 0} ⭐`);
+  const earned = await prisma.unlock.groupBy({ by: ["contentId"], _sum: { creatorEarnedUsdt: true }, where: { content: { creatorId: creator.id } } });
+  const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarnedUsdt ?? 0]));
+  const lines = list.map((c) => `«${c.title}» — 👁 ${c.viewCount} · 🔓 ${c.unlockCount} · ❤️ ${c.likeCount} · 💰 ${fmtUsd(em.get(c.id) ?? 0)} USDT`);
   await ctx.reply("📂\n\n" + lines.join("\n"));
 });
 
@@ -303,14 +371,28 @@ bot.command("earnings", async (ctx) => {
   const b = await creatorBalance(creator.id);
   await ctx.reply(
     t(lang, "earnings", {
-      earned: b.earned,
-      reserved: b.reserved,
-      available: b.available,
-      min: config.minWithdrawStars,
+      earned: fmtUsd(b.earned),
+      reserved: fmtUsd(b.reserved),
+      available: fmtUsd(b.available),
+      min: fmtUsd(config.minWithdrawUsdt),
       share: config.creatorSharePercent,
       plat: 100 - config.creatorSharePercent,
+      wallet: creator.tonWallet ?? "—",
     }),
   );
+});
+
+bot.command("wallet", async (ctx) => {
+  if (!ctx.from) return;
+  const lang = await userLang(String(ctx.from.id));
+  const arg = (ctx.match ?? "").toString().trim();
+  if (!arg) {
+    const u = await prisma.user.findUnique({ where: { telegramId: String(ctx.from.id) } });
+    const current = u?.tonWallet ? t(lang, "walletCurrent", { addr: u.tonWallet }) : "";
+    return ctx.reply(t(lang, "walletPrompt", { current }));
+  }
+  const res = await setTonWallet(String(ctx.from.id), arg, lang);
+  await ctx.reply(res.message);
 });
 
 bot.command("withdraw", async (ctx) => {
@@ -322,14 +404,30 @@ bot.command("withdraw", async (ctx) => {
 
 // ---------------- Payout ijrosi (admin) ----------------
 
+// Payout tarixi (avtomatik — monitoring)
 bot.command("payouts", async (ctx) => {
   if (!isAdmin(ctx.from?.id)) return;
-  const list = await prisma.payout.findMany({ where: { status: "requested" }, orderBy: { id: "asc" }, take: 20, include: { user: true } });
-  if (!list.length) return ctx.reply("Kutayotgan payout so'rovi yo'q. ✅");
-  for (const p of list) {
-    const kb = new InlineKeyboard().text("✅ To'landi", `payout_paid:${p.id}`).text("❌ Rad", `payout_reject:${p.id}`);
-    await ctx.reply(`💸 #${p.id} — @${p.user.username ?? p.user.telegramId}\nSumma: ${p.amountStars} ⭐`, { reply_markup: kb });
-  }
+  const list = await prisma.payout.findMany({ orderBy: { id: "desc" }, take: 20, include: { user: true } });
+  if (!list.length) return ctx.reply("Payout tarixi bo'sh.");
+  const icon: Record<string, string> = { paid: "✅", processing: "⏳", failed: "❌", requested: "📩", rejected: "🚫" };
+  const lines = list.map(
+    (p) =>
+      `${icon[p.status] ?? "•"} #${p.id} @${p.user.username ?? p.user.telegramId} · ${fmtUsd(p.amountUsdt)} USDT · ${p.status}` +
+      (p.tonTxHash ? `\n   tx: ${p.tonTxHash.slice(0, 16)}…` : ""),
+  );
+  await ctx.reply("💸 Payoutlar (oxirgi 20):\n\n" + lines.join("\n"));
+});
+
+// Hot-wallet — to'ldirish uchun manzil va balans (admin)
+bot.command("hotwallet", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  if (!tonEnabled()) return ctx.reply("⚙️ TON payout sozlanmagan (TON_MNEMONIC yo'q).");
+  const hw = await getHotWalletInfo().catch(() => null);
+  if (!hw) return ctx.reply("Hot-wallet ma'lumotini olib bo'lmadi (TON API xatosi).");
+  await ctx.reply(
+    `🔥 Hot-wallet (payout manbasi)\n\nManzil:\n\`${hw.address}\`\n\nBalans:\n💵 ${fmtUsd(hw.usdt)} USDT\n💎 ${hw.ton.toFixed(3)} TON\n\nShu manzilga USDT (TON tarmog'i) va gaz uchun ozroq TON (≥1) yuboring.`,
+    { parse_mode: "Markdown" },
+  );
 });
 
 // Bot Stars balansi (admin)
@@ -349,38 +447,22 @@ bot.command("balance", async (ctx) => {
     out += "Oxirgi tranzaksiyalar:\n" + (lines.length ? lines.join("\n") : "—");
   }
   if (!out) out = "Ma'lumot olinmadi (Stars API mavjud emas bo'lishi mumkin).";
-  out += "\n\n💡 Starlarni Fragment (fragment.com) orqali TON'ga yechasiz (~21 kun ushlanadi).";
+
+  // USDT bo'yicha platforma statistikasi
+  const feeAgg = await prisma.unlock.aggregate({ _sum: { platformFeeUsdt: true, creatorEarnedUsdt: true } });
+  const paidAgg = await prisma.payout.aggregate({ _sum: { amountUsdt: true }, where: { status: "paid" } });
+  out += `\n\n🏦 Platforma komissiyasi (${100 - config.creatorSharePercent}%): ${fmtUsd(feeAgg._sum.platformFeeUsdt ?? 0)} USDT`;
+  out += `\n👥 Creatorlar ishlagani (${config.creatorSharePercent}%): ${fmtUsd(feeAgg._sum.creatorEarnedUsdt ?? 0)} USDT`;
+  out += `\n💸 To'langan payout: ${fmtUsd(paidAgg._sum.amountUsdt ?? 0)} USDT`;
+
+  if (tonEnabled()) {
+    const hw = await getHotWalletInfo().catch(() => null);
+    if (hw) out += `\n\n🔥 Hot-wallet: ${fmtUsd(hw.usdt)} USDT · ${hw.ton.toFixed(3)} TON\n(/hotwallet — to'ldirish)`;
+  } else {
+    out += "\n\n⚙️ TON payout hali sozlanmagan (TON_MNEMONIC yo'q).";
+  }
+  out += "\n\n💡 Starlarni Fragment (fragment.com) orqali TON/USDT'ga yechib, hot-wallet'ni to'ldirasiz (~21 kun ushlanadi).";
   await ctx.reply(out);
-});
-
-bot.callbackQuery(/^payout_paid:(\d+)$/, async (ctx) => {
-  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
-  const id = Number(ctx.match[1]);
-  const p = await prisma.payout.findUnique({ where: { id }, include: { user: true } });
-  if (!p || p.status !== "requested") {
-    await ctx.answerCallbackQuery("Allaqachon ko'rib chiqilgan");
-    await ctx.editMessageReplyMarkup().catch(() => {});
-    return;
-  }
-  await prisma.payout.update({ where: { id }, data: { status: "paid" } });
-  await ctx.answerCallbackQuery("✅ To'langan");
-  await ctx.editMessageReplyMarkup().catch(() => {});
-  await bot.api.sendMessage(p.user.telegramId, `✅ Payout #${p.id}: ${p.amountStars} ⭐ to'landi.`).catch(() => {});
-});
-
-bot.callbackQuery(/^payout_reject:(\d+)$/, async (ctx) => {
-  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
-  const id = Number(ctx.match[1]);
-  const p = await prisma.payout.findUnique({ where: { id }, include: { user: true } });
-  if (!p || p.status !== "requested") {
-    await ctx.answerCallbackQuery("Allaqachon ko'rib chiqilgan");
-    await ctx.editMessageReplyMarkup().catch(() => {});
-    return;
-  }
-  await prisma.payout.update({ where: { id }, data: { status: "rejected" } });
-  await ctx.answerCallbackQuery("❌ Rad etildi");
-  await ctx.editMessageReplyMarkup().catch(() => {});
-  await bot.api.sendMessage(p.user.telegramId, `❌ Payout #${p.id} rad etildi. ${p.amountStars} ⭐ balansingizga qaytdi.`).catch(() => {});
 });
 
 // ---------------- To'lovlar (Telegram Stars) ----------------

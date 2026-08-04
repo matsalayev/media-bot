@@ -18,7 +18,7 @@ const UI = {
   uz: {
     profile: "Profil", myContent: "Mening kontentim", liked: "Yoqtirganlar", saved: "Saqlangan",
     uploadTitle: "Video joylash", fReel: "Qisqa REELS video", fVideo: "To'liq video", fTitle: "Sarlavha",
-    fPrice: "Narx (⭐, 0 = bepul)", uploadHint: "Maks. 50MB. Darhol joylanadi.", post: "Video joylash",
+    fPrice: "Narx (USDT, 0 = bepul)", uploadHint: "Maks. 50MB. Darhol joylanadi.", post: "Video joylash",
     uploadBtn: "Yuklash", watchFull: "To'liq ko'rish", unlock: "To'liq ochish",
     sentToChat: "✅ Video chatingizga yuborildi", paymentFailed: "To'lov amalga oshmadi", connErr: "Ulanishda xatolik",
     savedToast: "Saqlandi", removedToast: "Olib tashlandi", noContent: "Hozircha kontent yo'q. ➕ orqali qo'shing.",
@@ -26,11 +26,13 @@ const UI = {
     minWithdraw: "Yechish uchun min.", myContentEmpty: "Hali kontent yo'q.", likedEmpty: "Yoqtirgan yo'q.",
     savedEmpty: "Saqlangan yo'q.", selectFiles: "Reel va to'liq videoni tanlang", enterTitle: "Sarlavha kiriting",
     uploading: "Yuklanmoqda…", uploadedOk: "✅ Joylandi!", errGeneric: "Xatolik yuz berdi", free: "bepul",
+    walletTitle: "TON hamyon (USDT olish uchun)", walletPlaceholder: "TON manzil (UQ… yoki EQ…)", walletSave: "Saqlash",
+    walletSavedToast: "✅ Hamyon saqlandi", walletNeeded: "Avval TON hamyon manzilingizni saqlang", withdrawing: "Yuborilmoqda…",
   },
   ru: {
     profile: "Профиль", myContent: "Мои видео", liked: "Понравившиеся", saved: "Сохранённые",
     uploadTitle: "Загрузить видео", fReel: "Короткое REELS видео", fVideo: "Полное видео", fTitle: "Название",
-    fPrice: "Цена (⭐, 0 = бесплатно)", uploadHint: "Макс. 50MB. Публикуется сразу.", post: "Загрузить видео",
+    fPrice: "Цена (USDT, 0 = бесплатно)", uploadHint: "Макс. 50MB. Публикуется сразу.", post: "Загрузить видео",
     uploadBtn: "Загрузить", watchFull: "Смотреть полностью", unlock: "Открыть полностью",
     sentToChat: "✅ Видео отправлено в чат", paymentFailed: "Оплата не прошла", connErr: "Ошибка соединения",
     savedToast: "Сохранено", removedToast: "Удалено", noContent: "Пока нет контента. Добавьте через ➕.",
@@ -38,11 +40,13 @@ const UI = {
     minWithdraw: "Для вывода мин.", myContentEmpty: "Пока нет контента.", likedEmpty: "Нет понравившихся.",
     savedEmpty: "Нет сохранённых.", selectFiles: "Выберите reel и полное видео", enterTitle: "Введите название",
     uploading: "Загрузка…", uploadedOk: "✅ Опубликовано!", errGeneric: "Произошла ошибка", free: "бесплатно",
+    walletTitle: "TON кошелёк (для получения USDT)", walletPlaceholder: "TON адрес (UQ… или EQ…)", walletSave: "Сохранить",
+    walletSavedToast: "✅ Кошелёк сохранён", walletNeeded: "Сначала сохраните адрес TON кошелька", withdrawing: "Отправка…",
   },
   en: {
     profile: "Profile", myContent: "My content", liked: "Liked", saved: "Saved",
     uploadTitle: "Upload video", fReel: "Short REELS video", fVideo: "Full video", fTitle: "Title",
-    fPrice: "Price (⭐, 0 = free)", uploadHint: "Max 50MB. Published instantly.", post: "Upload video",
+    fPrice: "Price (USDT, 0 = free)", uploadHint: "Max 50MB. Published instantly.", post: "Upload video",
     uploadBtn: "Upload", watchFull: "Watch full", unlock: "Unlock full",
     sentToChat: "✅ Video sent to your chat", paymentFailed: "Payment failed", connErr: "Connection error",
     savedToast: "Saved", removedToast: "Removed", noContent: "No content yet. Add via ➕.",
@@ -50,6 +54,8 @@ const UI = {
     minWithdraw: "Min to withdraw:", myContentEmpty: "No content yet.", likedEmpty: "Nothing liked.",
     savedEmpty: "Nothing saved.", selectFiles: "Select reel and full video", enterTitle: "Enter a title",
     uploading: "Uploading…", uploadedOk: "✅ Published!", errGeneric: "Something went wrong", free: "free",
+    walletTitle: "TON wallet (to receive USDT)", walletPlaceholder: "TON address (UQ… or EQ…)", walletSave: "Save",
+    walletSavedToast: "✅ Wallet saved", walletNeeded: "Save your TON wallet address first", withdrawing: "Sending…",
   },
 };
 let LANG = "uz";
@@ -95,6 +101,17 @@ function toast(msg) {
 }
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function usd(n) {
+  return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toFixed(2);
+}
+function hintEl(text) {
+  const h = document.createElement("div");
+  h.className = "hint";
+  h.style.textAlign = "left";
+  h.style.marginTop = "6px";
+  h.textContent = text;
+  return h;
 }
 
 // ---------------- Reels feed ----------------
@@ -370,22 +387,21 @@ async function loadMe() {
   const b = d.balance || { earned: 0, available: 0 };
   balCard.innerHTML =
     '<div class="card-title">' + L("balanceTitle") + " (" + d.creatorShare + "%)</div>" +
-    '<div class="card-row"><span>' + L("totalEarned") + "</span><b>" + b.earned + " ⭐</b></div>" +
-    '<div class="card-row"><span>' + L("available") + "</span><b>" + b.available + " ⭐</b></div>";
-  if (b.available >= d.minWithdraw) {
+    '<div class="card-row"><span>' + L("totalEarned") + "</span><b>" + usd(b.earned) + " USDT</b></div>" +
+    '<div class="card-row"><span>' + L("available") + "</span><b>" + usd(b.available) + " USDT</b></div>";
+  const canWithdraw = b.available >= d.minWithdraw;
+  if (canWithdraw && d.tonWallet && d.payoutEnabled) {
     const wb = document.createElement("button");
     wb.className = "primary";
-    wb.textContent = L("withdrawBtn") + " — " + b.available + " ⭐";
+    wb.textContent = L("withdrawBtn") + " — " + usd(b.available) + " USDT";
     wb.addEventListener("click", () => withdraw(wb));
     balCard.appendChild(wb);
+  } else if (canWithdraw && !d.tonWallet) {
+    balCard.appendChild(hintEl(L("walletNeeded")));
   } else {
-    const h = document.createElement("div");
-    h.className = "hint";
-    h.style.textAlign = "left";
-    h.style.marginTop = "6px";
-    h.textContent = L("minWithdraw") + " " + d.minWithdraw + " ⭐";
-    balCard.appendChild(h);
+    balCard.appendChild(hintEl(L("minWithdraw") + " " + usd(d.minWithdraw) + " USDT"));
   }
+  renderWallet(d);
 
   const items = d.content || [];
   if (!items.length) {
@@ -396,7 +412,7 @@ async function loadMe() {
       row.className = "row";
       row.innerHTML =
         '<span class="row-title">' + escapeHtml(it.title) + "</span>" +
-        '<span class="row-stats">👁 ' + it.views + " · 🔓 " + it.unlocks + " · ❤️ " + it.likes + " · 💰 " + it.earned + "⭐</span>";
+        '<span class="row-stats">👁 ' + it.views + " · 🔓 " + it.unlocks + " · ❤️ " + it.likes + " · 💰 " + usd(it.earned) + " USDT</span>";
       myContent.appendChild(row);
     }
   }
@@ -405,8 +421,48 @@ async function loadMe() {
   simpleList(savedList, d.saved || [], "savedEmpty");
 }
 
+function renderWallet(d) {
+  const c = document.getElementById("walletCard");
+  if (!c) return;
+  c.innerHTML = '<div class="card-title">' + L("walletTitle") + "</div>";
+  const inp = document.createElement("input");
+  inp.type = "text";
+  inp.id = "walletInput";
+  inp.className = "wallet-input";
+  inp.placeholder = L("walletPlaceholder");
+  inp.value = d.tonWallet || "";
+  const btn = document.createElement("button");
+  btn.className = "primary";
+  btn.style.marginTop = "8px";
+  btn.textContent = L("walletSave");
+  btn.addEventListener("click", () => saveWallet(inp.value, btn));
+  c.appendChild(inp);
+  c.appendChild(btn);
+}
+
+async function saveWallet(address, btn) {
+  address = (address || "").trim();
+  if (!address) return toast(L("walletNeeded"));
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/wallet", { method: "POST", headers: HEADERS, body: JSON.stringify({ address }) });
+    const d = await r.json();
+    if (d.ok) {
+      toast(L("walletSavedToast"));
+      loadMe();
+    } else {
+      toast(d.message || L("errGeneric"));
+      btn.disabled = false;
+    }
+  } catch (e) {
+    toast(L("connErr"));
+    btn.disabled = false;
+  }
+}
+
 async function withdraw(btn) {
   btn.disabled = true;
+  btn.textContent = L("withdrawing");
   try {
     const r = await fetch("/api/withdraw", { method: "POST", headers: HEADERS, body: "{}" });
     const d = await r.json();
