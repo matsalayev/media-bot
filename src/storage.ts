@@ -1,4 +1,5 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { config } from "./config";
 
 let s3: S3Client | null = null;
@@ -17,8 +18,8 @@ function client(): S3Client {
   return s3;
 }
 
-/** Reel (qisqa video) buferini S3'ga yuklaydi va public URL qaytaradi. */
-export async function uploadReelToS3(buffer: Buffer, key: string, contentType = "video/mp4"): Promise<string> {
+/** Reel buferini S3'ga yuklaydi (private). */
+export async function putReelToS3(buffer: Buffer, key: string, contentType = "video/mp4"): Promise<void> {
   await client().send(
     new PutObjectCommand({
       Bucket: config.awsBucket,
@@ -28,6 +29,15 @@ export async function uploadReelToS3(buffer: Buffer, key: string, contentType = 
       CacheControl: "public, max-age=31536000",
     }),
   );
+}
+
+/** CloudFront/public domen orqali to'g'ridan-to'g'ri URL (AWS_PUBLIC_BASE_URL bo'lsa). */
+export function publicUrlFor(key: string): string {
   const base = config.awsPublicBaseUrl || `https://${config.awsBucket}.s3.${config.awsRegion}.amazonaws.com`;
   return `${base.replace(/\/$/, "")}/${key}`;
+}
+
+/** Private obyekt uchun vaqtinchalik (presigned) GET URL — bucket public bo'lishi shart emas. */
+export async function presignReelUrl(key: string, expiresIn = 86400): Promise<string> {
+  return getSignedUrl(client(), new GetObjectCommand({ Bucket: config.awsBucket, Key: key }), { expiresIn });
 }

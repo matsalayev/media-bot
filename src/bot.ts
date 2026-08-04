@@ -2,7 +2,7 @@ import { Bot, Context, InlineKeyboard, InputFile, session, SessionFlavor } from 
 import { randomUUID } from "crypto";
 import { config, assertBotConfig } from "./config";
 import { prisma } from "./db";
-import { s3Enabled, uploadReelToS3 } from "./storage";
+import { s3Enabled, putReelToS3, publicUrlFor } from "./storage";
 
 interface Draft {
   reelFileId?: string;
@@ -91,8 +91,10 @@ async function storeReel(source: { buffer?: Buffer; fileId?: string }): Promise<
   if (s3Enabled()) {
     const buf = source.buffer ?? (source.fileId ? await downloadTelegramFile(source.fileId) : null);
     if (buf) {
-      const url = await uploadReelToS3(buf, `reels/${randomUUID()}.mp4`);
-      return { reelUrl: url, reelFileId: null };
+      const key = `reels/${randomUUID()}.mp4`;
+      await putReelToS3(buf, key);
+      // CloudFront/public domen bo'lsa to'g'ridan-to'g'ri URL; aks holda S3 KEY saqlanadi (o'qishда presign qilinadi)
+      return { reelUrl: config.awsPublicBaseUrl ? publicUrlFor(key) : key, reelFileId: null };
     }
   }
   if (source.fileId) return { reelUrl: null, reelFileId: source.fileId };

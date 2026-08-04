@@ -6,6 +6,7 @@ import { Readable } from "stream";
 import { config } from "./config";
 import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
+import { s3Enabled, presignReelUrl } from "./storage";
 import {
   bot,
   deliverContent,
@@ -18,8 +19,12 @@ import {
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
 
-function reelSrc(c: { reelUrl: string | null; id: number }): string {
-  return c.reelUrl || `/media/reel/${c.id}`;
+async function reelSrc(c: { reelUrl: string | null; reelFileId: string | null; id: number }): Promise<string> {
+  if (c.reelUrl) {
+    if (/^https?:\/\//.test(c.reelUrl)) return c.reelUrl; // public / CloudFront URL
+    if (s3Enabled()) return presignReelUrl(c.reelUrl); // S3 key -> presigned URL
+  }
+  return `/media/reel/${c.id}`; // Telegram proxy fallback
 }
 
 async function getUser(tg: TgUser) {
@@ -77,19 +82,21 @@ export function buildServer() {
 
     return {
       botUsername: botUsername(),
-      items: items.map((c) => ({
-        id: c.id,
-        title: c.title,
-        description: c.description,
-        priceStars: c.priceStars,
-        reelUrl: reelSrc(c),
-        unlocked: unlocked.has(c.id) || c.priceStars === 0,
-        liked: liked.has(c.id),
-        saved: saved.has(c.id),
-        likeCount: c.likeCount,
-        saveCount: c.saveCount,
-        shareCount: c.shareCount,
-      })),
+      items: await Promise.all(
+        items.map(async (c) => ({
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          priceStars: c.priceStars,
+          reelUrl: await reelSrc(c),
+          unlocked: unlocked.has(c.id) || c.priceStars === 0,
+          liked: liked.has(c.id),
+          saved: saved.has(c.id),
+          likeCount: c.likeCount,
+          saveCount: c.saveCount,
+          shareCount: c.shareCount,
+        })),
+      ),
     };
   });
 
