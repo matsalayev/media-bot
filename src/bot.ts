@@ -332,6 +332,27 @@ bot.command("payouts", async (ctx) => {
   }
 });
 
+// Bot Stars balansi (admin)
+bot.command("balance", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const call = (m: string, body?: unknown) =>
+    fetch(`https://api.telegram.org/bot${config.botToken}/${m}`, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined)
+      .then((r) => r.json())
+      .catch(() => null as unknown);
+  let out = "";
+  const bal: any = await call("getMyStarBalance");
+  if (bal?.ok && bal.result) out += `⭐ Bot balansi: ${bal.result.amount} Stars\n\n`;
+  const tx: any = await call("getStarTransactions", { limit: 10 });
+  if (tx?.ok && tx.result) {
+    const list: any[] = tx.result.transactions || [];
+    const lines = list.map((tr: any) => `${tr.source ? "➕" : "➖"} ${tr.amount} ⭐`);
+    out += "Oxirgi tranzaksiyalar:\n" + (lines.length ? lines.join("\n") : "—");
+  }
+  if (!out) out = "Ma'lumot olinmadi (Stars API mavjud emas bo'lishi mumkin).";
+  out += "\n\n💡 Starlarni Fragment (fragment.com) orqali TON'ga yechasiz (~21 kun ushlanadi).";
+  await ctx.reply(out);
+});
+
 bot.callbackQuery(/^payout_paid:(\d+)$/, async (ctx) => {
   if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
   const id = Number(ctx.match[1]);
