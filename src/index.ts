@@ -17,7 +17,7 @@ async function main() {
   if (config.webappUrl) {
     try {
       await bot.api.setChatMenuButton({
-        menu_button: { type: "web_app", text: "🎬 Kino", web_app: { url: config.webappUrl } },
+        menu_button: { type: "web_app", text: "Media", web_app: { url: config.webappUrl } },
       });
     } catch (e) {
       console.warn("Menyu tugmasini o'rnatib bo'lmadi:", e);

@@ -16,6 +16,7 @@ model User {
   username     String?
   firstName    String?
   languageCode String?
+  lang         String? // tanlangan interfeys tili: uz | ru | en
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 

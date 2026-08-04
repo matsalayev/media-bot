@@ -7,15 +7,8 @@ import { config } from "./config";
 import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
-import {
-  bot,
-  deliverContent,
-  createStarsInvoiceLink,
-  creatorBalance,
-  requestPayout,
-  createContent,
-  notifyAdminsNewContent,
-} from "./bot";
+import { normLang } from "./i18n";
+import { bot, deliverContent, createStarsInvoiceLink, creatorBalance, requestPayout, createContent } from "./bot";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
 
@@ -62,7 +55,12 @@ export function buildServer() {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     const body = (req.body ?? {}) as { focus?: number };
     let userId: number | null = null;
-    if (tg) userId = (await getUser(tg)).id;
+    let lang = "uz";
+    if (tg) {
+      const u = await getUser(tg);
+      userId = u.id;
+      lang = normLang(u.lang);
+    }
 
     let items = await prisma.content.findMany({ where: { status: "published" }, orderBy: { id: "desc" }, take: 30 });
     const focusId = Number(body.focus) || 0;
@@ -82,6 +80,7 @@ export function buildServer() {
 
     return {
       botUsername: botUsername(),
+      lang,
       items: await Promise.all(
         items.map(async (c) => ({
           id: c.id,
@@ -200,7 +199,14 @@ export function buildServer() {
       orderBy: { id: "desc" },
       take: 50,
     });
+    const likedRows = await prisma.contentLike.findMany({
+      where: { userId: user.id },
+      include: { content: true },
+      orderBy: { id: "desc" },
+      take: 50,
+    });
     return {
+      lang: normLang(user.lang),
       user: { firstName: user.firstName, username: user.username },
       balance: bal,
       minWithdraw: config.minWithdrawStars,
@@ -215,6 +221,7 @@ export function buildServer() {
         earned: em.get(c.id) ?? 0,
       })),
       saved: savedRows.map((s) => ({ id: s.content.id, title: s.content.title, priceStars: s.content.priceStars })),
+      liked: likedRows.map((l) => ({ id: l.content.id, title: l.content.title, priceStars: l.content.priceStars })),
     };
   });
 
@@ -242,16 +249,8 @@ export function buildServer() {
     if (!title) return reply.code(400).send({ error: "sarlavha kerak" });
 
     try {
-      const content = await createContent(
-        tg.id,
-        { buffer: files.reel.buffer },
-        { buffer: files.video.buffer },
-        title,
-        price,
-        false,
-      );
-      await notifyAdminsNewContent(content, "@" + (tg.username ?? tg.id));
-      return { status: "pending", id: content.id };
+      const content = await createContent(tg.id, { buffer: files.reel.buffer }, { buffer: files.video.buffer }, title, price);
+      return { status: "published", id: content.id };
     } catch (e) {
       return reply.code(500).send({ error: "Yuklashda xatolik (fayl juda katta yoki S3 sozlanmagan bo'lishi mumkin)" });
     }
