@@ -24,6 +24,36 @@ async function main() {
     }
   }
 
+  // 2b) Buyruqlar menyusi ("/" avtomatik to'ldirish) — adminlarga admin buyruqlari ham
+  const userCommands = [
+    { command: "start", description: "Boshlash / til" },
+    { command: "upload", description: "Video joylash" },
+    { command: "mycontent", description: "Mening kontentim" },
+    { command: "earnings", description: "Daromad (USDT)" },
+    { command: "wallet", description: "TON hamyonni ulash" },
+    { command: "withdraw", description: "USDT yechish" },
+    { command: "lang", description: "Tilni o'zgartirish" },
+    { command: "help", description: "Yordam" },
+  ];
+  const adminCommands = [
+    ...userCommands,
+    { command: "admin", description: "Admin panel — barcha buyruqlar" },
+    { command: "add", description: "Video qo'shish (admin)" },
+    { command: "balance", description: "Balans + komissiya + hot-wallet" },
+    { command: "hotwallet", description: "Hot-wallet manzili/balansi" },
+    { command: "payouts", description: "Payout tarixi" },
+  ];
+  try {
+    await bot.api.setMyCommands(userCommands);
+    for (const id of config.adminIds) {
+      await bot.api
+        .setMyCommands(adminCommands, { scope: { type: "chat", chat_id: Number(id) } })
+        .catch(() => {});
+    }
+  } catch (e) {
+    console.warn("Buyruqlar menyusini o'rnatib bo'lmadi:", e);
+  }
+
   // 3) Botni ishga tushirish (long polling)
   await bot.start({
     onStart: (bi) => console.log(`🤖 Bot @${bi.username} ishga tushdi (long polling)`),

@@ -291,6 +291,14 @@ bot.command("lang", (ctx) => ctx.reply("Tilni tanlang / Выберите язы�
 
 bot.command("help", async (ctx) => ctx.reply(t(await userLang(String(ctx.from?.id)), "help")));
 
+// Admin panel — barcha mavjud buyruqlar ro'yxati
+bot.command("admin", async (ctx) => {
+  if (!ctx.from) return;
+  const lang = await userLang(String(ctx.from.id));
+  if (!isAdmin(ctx.from.id)) return ctx.reply(t(lang, "help"));
+  await ctx.reply(t(lang, "adminPanel"));
+});
+
 // ---------------- Yuklash oqimi ----------------
 
 bot.command("add", async (ctx) => {
