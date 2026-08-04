@@ -123,6 +123,40 @@ body {
   color: #fff;
 }
 
+.reel-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: center;
+  z-index: 3;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+.action .action-count {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.action.active {
+  opacity: 1;
+}
+
 .toast {
   position: fixed;
   left: 50%;

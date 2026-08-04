@@ -3,6 +3,9 @@ import { bot } from "./bot";
 import { buildServer } from "./server";
 
 async function main() {
+  // 0) Bot ma'lumotini oldindan yuklash (share-link'lar uchun botInfo.username kerak)
+  await bot.init();
+
   // 1) Mini App + API serverini ishga tushirish
   const app = buildServer();
   await app.listen({ port: config.port, host: "0.0.0.0" });

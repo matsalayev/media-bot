@@ -3,7 +3,6 @@ const tg = window.Telegram && window.Telegram.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
-  // Telegram mavzusiga moslash (native ko'rinish)
   if (tg.setHeaderColor) {
     try {
       tg.setHeaderColor("#000000");
@@ -23,50 +22,14 @@ function toast(msg) {
   toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2600);
 }
 
-const subBtn = document.getElementById("subBtn");
-subBtn.addEventListener("click", subscribe);
-
-function updateSubBtn(data) {
-  if (data && data.subscribed) {
-    subBtn.hidden = false;
-    subBtn.classList.add("active");
-    subBtn.disabled = true;
-    subBtn.textContent = "✓ Obuna faol";
-  } else if (data && data.subPriceStars) {
-    subBtn.hidden = false;
-    subBtn.classList.remove("active");
-    subBtn.disabled = false;
-    subBtn.textContent = "⭐ Obuna — " + data.subPriceStars + "⭐ / cheksiz";
-  } else {
-    subBtn.hidden = true;
-  }
+function escapeHtml(s) {
+  return String(s || "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
 }
 
-async function subscribe() {
-  subBtn.disabled = true;
-  try {
-    const r = await fetch("/api/subscribe", { method: "POST", headers: HEADERS, body: "{}" });
-    const d = await r.json();
-    if (d.invoiceLink && tg && tg.openInvoice) {
-      tg.openInvoice(d.invoiceLink, (status) => {
-        if (status === "paid") {
-          toast("✅ Obuna faollashtirildi!");
-          load();
-          if (!document.getElementById("profile").hidden) loadMe();
-        } else {
-          subBtn.disabled = false;
-          if (status === "failed") toast("To'lov amalga oshmadi");
-        }
-      });
-    } else {
-      subBtn.disabled = false;
-      toast("Xatolik yuz berdi");
-    }
-  } catch (e) {
-    subBtn.disabled = false;
-    toast("Ulanishda xatolik");
-  }
-}
+// ==================== Reels feed ====================
 
 function watchLabel(it) {
   if (it.unlocked) return "▶️ To'liq ko'rish";
@@ -90,12 +53,43 @@ function renderReel(it) {
   const badge = document.createElement("div");
   badge.className = "muted-badge";
   badge.textContent = "🔇";
-
   v.addEventListener("click", () => {
     v.muted = !v.muted;
     badge.textContent = v.muted ? "🔇" : "🔊";
     if (v.paused) v.play().catch(() => {});
   });
+
+  // Yon tugmalar: like / save / share
+  const actions = document.createElement("div");
+  actions.className = "reel-actions";
+
+  const likeBtn = document.createElement("button");
+  likeBtn.className = "action";
+  const likeCount = document.createElement("span");
+  likeCount.className = "action-count";
+  likeBtn.appendChild(document.createTextNode(it.liked ? "❤️" : "🤍"));
+  likeBtn.appendChild(likeCount);
+  likeCount.textContent = it.likeCount || 0;
+  likeBtn.addEventListener("click", () => toggleLike(it, likeBtn, likeCount));
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "action" + (it.saved ? " active" : "");
+  saveBtn.textContent = "🔖";
+  saveBtn.style.opacity = it.saved ? "1" : "0.55";
+  saveBtn.addEventListener("click", () => toggleSave(it, saveBtn));
+
+  const shareBtn = document.createElement("button");
+  shareBtn.className = "action";
+  shareBtn.appendChild(document.createTextNode("↗️"));
+  const shareCount = document.createElement("span");
+  shareCount.className = "action-count";
+  shareCount.textContent = it.shareCount || 0;
+  shareBtn.appendChild(shareCount);
+  shareBtn.addEventListener("click", () => shareReel(it, shareCount));
+
+  actions.appendChild(likeBtn);
+  actions.appendChild(saveBtn);
+  actions.appendChild(shareBtn);
 
   const ov = document.createElement("div");
   ov.className = "overlay";
@@ -115,18 +109,57 @@ function renderReel(it) {
 
   el.appendChild(v);
   el.appendChild(badge);
+  el.appendChild(actions);
   el.appendChild(ov);
   return el;
+}
+
+async function toggleLike(it, btn, countEl) {
+  try {
+    const r = await fetch("/api/like", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) });
+    const d = await r.json();
+    it.liked = d.liked;
+    it.likeCount = d.likeCount;
+    btn.childNodes[0].nodeValue = d.liked ? "❤️" : "🤍";
+    countEl.textContent = d.likeCount;
+  } catch (e) {
+    toast("Ulanishda xatolik");
+  }
+}
+
+async function toggleSave(it, btn) {
+  try {
+    const r = await fetch("/api/save", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) });
+    const d = await r.json();
+    it.saved = d.saved;
+    btn.classList.toggle("active", d.saved);
+    btn.style.opacity = d.saved ? "1" : "0.55";
+    toast(d.saved ? "🔖 Saqlandi" : "Olib tashlandi");
+  } catch (e) {
+    toast("Ulanishda xatolik");
+  }
+}
+
+async function shareReel(it, countEl) {
+  try {
+    const r = await fetch("/api/share", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) });
+    const d = await r.json();
+    if (countEl) countEl.textContent = (Number(countEl.textContent) || 0) + 1;
+    if (d.link && tg && tg.openTelegramLink) {
+      const url = "https://t.me/share/url?url=" + encodeURIComponent(d.link) + "&text=" + encodeURIComponent(it.title || "Kino");
+      tg.openTelegramLink(url);
+    } else if (d.link) {
+      toast("Havola: " + d.link);
+    }
+  } catch (e) {
+    toast("Ulanishda xatolik");
+  }
 }
 
 async function unlock(it, btn) {
   btn.disabled = true;
   try {
-    const r = await fetch("/api/unlock", {
-      method: "POST",
-      headers: HEADERS,
-      body: JSON.stringify({ contentId: it.id }),
-    });
+    const r = await fetch("/api/unlock", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) });
     const d = await r.json();
     if (d.status === "delivered") {
       toast("✅ Video Telegram chatingizga yuborildi");
@@ -150,7 +183,6 @@ async function unlock(it, btn) {
   }
 }
 
-// Ko'rinib turgan reels'ni avtoijro etadi va ko'rishni hisoblaydi
 const seen = new Set();
 function setupAutoplay() {
   const io = new IntersectionObserver(
@@ -163,11 +195,7 @@ function setupAutoplay() {
           const id = e.target.dataset.id;
           if (id && !seen.has(id)) {
             seen.add(id);
-            fetch("/api/view", {
-              method: "POST",
-              headers: HEADERS,
-              body: JSON.stringify({ contentId: Number(id) }),
-            }).catch(() => {});
+            fetch("/api/view", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: Number(id) }) }).catch(() => {});
           }
         } else {
           v.pause();
@@ -179,34 +207,27 @@ function setupAutoplay() {
   document.querySelectorAll(".reel").forEach((r) => io.observe(r));
 }
 
-async function load() {
+async function load(focus) {
   let data;
   try {
-    const r = await fetch("/api/reels", { method: "POST", headers: HEADERS, body: "{}" });
+    const r = await fetch("/api/reels", { method: "POST", headers: HEADERS, body: JSON.stringify({ focus: focus || 0 }) });
     data = await r.json();
   } catch (e) {
     feed.innerHTML = '<div class="empty">Ulanishda xatolik.</div>';
     return;
   }
-  updateSubBtn(data);
   const items = (data && data.items) || [];
   if (!items.length) {
-    feed.innerHTML = "<div class=\"empty\">Hozircha kontent yo'q.<br>Admin bot orqali /add bilan qo'shadi.</div>";
+    feed.innerHTML = "<div class=\"empty\">Hozircha kontent yo'q.<br>👤 profil → ➕ orqali qo'shing.</div>";
     return;
   }
   feed.innerHTML = "";
   for (const it of items) feed.appendChild(renderReel(it));
+  feed.scrollTop = 0;
   setupAutoplay();
 }
 
 // ==================== Profil / Yuklash ====================
-
-function escapeHtml(s) {
-  return String(s || "").replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
-  );
-}
 
 function pauseFeed() {
   document.querySelectorAll(".reel video").forEach((v) => v.pause());
@@ -246,35 +267,22 @@ document.getElementById("openUpload").addEventListener("click", () => openScreen
 document.getElementById("doUpload").addEventListener("click", doUpload);
 
 async function loadMe() {
-  const subCard = document.getElementById("subCard");
   const balCard = document.getElementById("balCard");
   const myContent = document.getElementById("myContent");
-  subCard.innerHTML = '<div class="card-title">Yuklanmoqda…</div>';
-  balCard.innerHTML = "";
+  const savedList = document.getElementById("savedList");
+  balCard.innerHTML = '<div class="card-title">Yuklanmoqda…</div>';
   myContent.innerHTML = "";
+  savedList.innerHTML = "";
 
   let d;
   try {
     const r = await fetch("/api/me", { method: "POST", headers: HEADERS, body: "{}" });
     d = await r.json();
   } catch (e) {
-    subCard.innerHTML = '<div class="card-title">Ulanishda xatolik</div>';
+    balCard.innerHTML = '<div class="card-title">Ulanishda xatolik</div>';
     return;
   }
 
-  // Obuna
-  if (d.subscription && d.subscription.active) {
-    subCard.innerHTML = `<div class="card-title">Obuna</div><div class="card-main">✅ Faol — ${(d.subscription.until || "").slice(0, 10)} gacha</div>`;
-  } else {
-    subCard.innerHTML = `<div class="card-title">Obuna</div><div class="card-main">Obunasiz</div>`;
-    const btn = document.createElement("button");
-    btn.className = "primary";
-    btn.textContent = `⭐ Obuna bo'lish — ${d.subPriceStars}⭐ / ${d.subDays} kun`;
-    btn.addEventListener("click", subscribe);
-    subCard.appendChild(btn);
-  }
-
-  // Balans
   const b = d.balance || { earned: 0, available: 0 };
   balCard.innerHTML =
     `<div class="card-title">Creator daromadi (ulush ${d.creatorShare}%)</div>` +
@@ -295,20 +303,37 @@ async function loadMe() {
     balCard.appendChild(h);
   }
 
-  // Mening kontentim
   const items = d.content || [];
   if (!items.length) {
     myContent.innerHTML = '<div class="list-empty">Hali kontent yo\'q. ➕ orqali joylang.</div>';
   } else {
     const emoji = (s) => (s === "published" ? "🟢" : s === "pending" ? "🟡" : s === "rejected" ? "🔴" : "⚪");
-    myContent.innerHTML = "";
     for (const it of items) {
       const row = document.createElement("div");
       row.className = "row";
       row.innerHTML =
         `<span class="row-title">${emoji(it.status)} ${escapeHtml(it.title)}</span>` +
-        `<span class="row-stats">👁 ${it.views} · 🔓 ${it.unlocks} · 💰 ${it.earned}⭐</span>`;
+        `<span class="row-stats">👁 ${it.views} · 🔓 ${it.unlocks} · ❤️ ${it.likes} · 💰 ${it.earned}⭐</span>`;
       myContent.appendChild(row);
+    }
+  }
+
+  const saved = d.saved || [];
+  if (!saved.length) {
+    savedList.innerHTML = '<div class="list-empty">Saqlangan yo\'q.</div>';
+  } else {
+    for (const it of saved) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.style.cursor = "pointer";
+      row.innerHTML =
+        `<span class="row-title">🔖 ${escapeHtml(it.title)}</span>` +
+        `<span class="row-stats">${it.priceStars > 0 ? it.priceStars + "⭐" : "bepul"}</span>`;
+      row.addEventListener("click", () => {
+        while (screenStack.length) closeTop();
+        load(it.id);
+      });
+      savedList.appendChild(row);
     }
   }
 }
@@ -364,4 +389,12 @@ async function doUpload() {
   }
 }
 
-load();
+// start_param bilan ochilsa (share havolasi) — o'sha kontentni birinchi ko'rsatish
+let startFocus = 0;
+try {
+  const sp = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+  const m = sp && /^c(\d+)$/.exec(sp);
+  if (m) startFocus = Number(m[1]);
+} catch (e) {}
+
+load(startFocus);

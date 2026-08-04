@@ -5,31 +5,48 @@ import { join } from "path";
 import { Readable } from "stream";
 import { config } from "./config";
 import { prisma } from "./db";
-import { validateInitData } from "./auth";
+import { validateInitData, TgUser } from "./auth";
 import {
   bot,
   deliverContent,
   createStarsInvoiceLink,
-  createSubscriptionInvoiceLink,
   creatorBalance,
   requestPayout,
-  ingestCreatorUpload,
+  createContent,
+  notifyAdminsNewContent,
 } from "./bot";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
 
+function reelSrc(c: { reelUrl: string | null; id: number }): string {
+  return c.reelUrl || `/media/reel/${c.id}`;
+}
+
+async function getUser(tg: TgUser) {
+  return prisma.user.upsert({
+    where: { telegramId: tg.id },
+    update: { username: tg.username, firstName: tg.first_name },
+    create: { telegramId: tg.id, username: tg.username, firstName: tg.first_name, languageCode: tg.language_code },
+  });
+}
+
+function botUsername(): string {
+  try {
+    return bot.botInfo.username;
+  } catch {
+    return "";
+  }
+}
+
 export function buildServer() {
   const app = Fastify({ logger: false });
-
-  // Mini App'dan video yuklash uchun (max 50MB/fayl — cloud Bot API cheklovi)
   app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 2 } });
 
   // ---- Mini App statik fayllari ----
-  const serveFile =
-    (file: string, type: string) => (_req: FastifyRequest, reply: FastifyReply) => {
-      reply.header("Content-Type", type);
-      reply.send(readFileSync(join(WEBAPP_DIR, file)));
-    };
+  const serveFile = (file: string, type: string) => (_req: FastifyRequest, reply: FastifyReply) => {
+    reply.header("Content-Type", type);
+    reply.send(readFileSync(join(WEBAPP_DIR, file)));
+  };
   app.get("/", serveFile("index.html", "text/html; charset=utf-8"));
   app.get("/app.js", serveFile("app.js", "application/javascript; charset=utf-8"));
   app.get("/style.css", serveFile("style.css", "text/css; charset=utf-8"));
@@ -37,61 +54,50 @@ export function buildServer() {
 
   // ---- Reels feed ----
   app.post("/api/reels", async (req) => {
-    const initData = (req.headers["x-init-data"] as string) || "";
-    const tg = validateInitData(initData);
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    const body = (req.body ?? {}) as { focus?: number };
     let userId: number | null = null;
-    if (tg) {
-      const user = await prisma.user.upsert({
-        where: { telegramId: tg.id },
-        update: { username: tg.username, firstName: tg.first_name },
-        create: {
-          telegramId: tg.id,
-          username: tg.username,
-          firstName: tg.first_name,
-          languageCode: tg.language_code,
-        },
-      });
-      userId = user.id;
+    if (tg) userId = (await getUser(tg)).id;
+
+    let items = await prisma.content.findMany({ where: { status: "published" }, orderBy: { id: "desc" }, take: 30 });
+    const focusId = Number(body.focus) || 0;
+    if (focusId) {
+      const f = await prisma.content.findFirst({ where: { id: focusId, status: "published" } });
+      if (f) items = [f, ...items.filter((x) => x.id !== focusId)];
     }
 
-    const items = await prisma.content.findMany({
-      where: { status: "published" },
-      orderBy: { id: "desc" },
-      take: 30,
-    });
-
     let unlocked = new Set<number>();
-    let subscribed = false;
+    let liked = new Set<number>();
+    let saved = new Set<number>();
     if (userId) {
-      const u = await prisma.unlock.findMany({ where: { userId }, select: { contentId: true } });
-      unlocked = new Set(u.map((x) => x.contentId));
-      const sub = await prisma.subscription.findUnique({ where: { userId } });
-      subscribed = !!sub && sub.status === "active" && sub.until > new Date();
+      unlocked = new Set((await prisma.unlock.findMany({ where: { userId }, select: { contentId: true } })).map((x) => x.contentId));
+      liked = new Set((await prisma.contentLike.findMany({ where: { userId }, select: { contentId: true } })).map((x) => x.contentId));
+      saved = new Set((await prisma.savedItem.findMany({ where: { userId }, select: { contentId: true } })).map((x) => x.contentId));
     }
 
     return {
-      subscribed,
-      subPriceStars: config.subPriceStars,
-      subDays: config.subDays,
+      botUsername: botUsername(),
       items: items.map((c) => ({
         id: c.id,
         title: c.title,
         description: c.description,
         priceStars: c.priceStars,
-        reelUrl: `/media/reel/${c.id}`,
-        unlocked: unlocked.has(c.id) || c.priceStars === 0 || subscribed,
+        reelUrl: reelSrc(c),
+        unlocked: unlocked.has(c.id) || c.priceStars === 0,
+        liked: liked.has(c.id),
+        saved: saved.has(c.id),
+        likeCount: c.likeCount,
+        saveCount: c.saveCount,
+        shareCount: c.shareCount,
       })),
     };
   });
 
   // ---- Ochish / yetkazish ----
   app.post("/api/unlock", async (req, reply) => {
-    const initData = (req.headers["x-init-data"] as string) || "";
-    const tg = validateInitData(initData);
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
-
-    const body = (req.body ?? {}) as { contentId?: number };
-    const contentId = Number(body.contentId);
+    const contentId = Number((req.body as { contentId?: number })?.contentId);
     if (!contentId) return reply.code(400).send({ error: "contentId required" });
 
     const content = await prisma.content.findFirst({ where: { id: contentId, status: "published" } });
@@ -101,46 +107,78 @@ export function buildServer() {
     const alreadyUnlocked = user
       ? await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } })
       : null;
-    const sub = user ? await prisma.subscription.findUnique({ where: { userId: user.id } }) : null;
-    const subscribed = !!sub && sub.status === "active" && sub.until > new Date();
 
-    if (content.priceStars === 0 || alreadyUnlocked || subscribed) {
-      const source = content.priceStars === 0 ? "free" : alreadyUnlocked ? "unlock" : "subscription";
-      await deliverContent(tg.id, contentId, source);
+    if (content.priceStars === 0 || alreadyUnlocked) {
+      await deliverContent(tg.id, contentId, content.priceStars === 0 ? "free" : "unlock");
       return { status: "delivered" };
     }
-
     const invoiceLink = await createStarsInvoiceLink(contentId, tg.id);
     return { status: "invoice", invoiceLink };
   });
 
-  // ---- Obuna invoice (Mini App) ----
-  app.post("/api/subscribe", async (req, reply) => {
-    const initData = (req.headers["x-init-data"] as string) || "";
-    const tg = validateInitData(initData);
+  // ---- Like (toggle) ----
+  app.post("/api/like", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    await prisma.user.upsert({
-      where: { telegramId: tg.id },
-      update: {},
-      create: { telegramId: tg.id, username: tg.username, firstName: tg.first_name, languageCode: tg.language_code },
-    });
-    const invoiceLink = await createSubscriptionInvoiceLink(tg.id);
-    return { invoiceLink };
+    const contentId = Number((req.body as { contentId?: number })?.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    const user = await getUser(tg);
+    const existing = await prisma.contentLike.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+    if (existing) {
+      await prisma.contentLike.delete({ where: { id: existing.id } });
+      const c = await prisma.content.update({ where: { id: contentId }, data: { likeCount: { decrement: 1 } } });
+      return { liked: false, likeCount: Math.max(0, c.likeCount) };
+    }
+    await prisma.contentLike.create({ data: { userId: user.id, contentId } });
+    const c = await prisma.content.update({ where: { id: contentId }, data: { likeCount: { increment: 1 } } });
+    return { liked: true, likeCount: c.likeCount };
   });
 
-  // ---- Profil: obuna, balans, mening kontentim ----
-  app.post("/api/me", async (req, reply) => {
-    const initData = (req.headers["x-init-data"] as string) || "";
-    const tg = validateInitData(initData);
+  // ---- Save (toggle) ----
+  app.post("/api/save", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    const user = await prisma.user.upsert({
-      where: { telegramId: tg.id },
-      update: { username: tg.username, firstName: tg.first_name },
-      create: { telegramId: tg.id, username: tg.username, firstName: tg.first_name, languageCode: tg.language_code },
-    });
+    const contentId = Number((req.body as { contentId?: number })?.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    const user = await getUser(tg);
+    const existing = await prisma.savedItem.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+    if (existing) {
+      await prisma.savedItem.delete({ where: { id: existing.id } });
+      const c = await prisma.content.update({ where: { id: contentId }, data: { saveCount: { decrement: 1 } } });
+      return { saved: false, saveCount: Math.max(0, c.saveCount) };
+    }
+    await prisma.savedItem.create({ data: { userId: user.id, contentId } });
+    const c = await prisma.content.update({ where: { id: contentId }, data: { saveCount: { increment: 1 } } });
+    return { saved: true, saveCount: c.saveCount };
+  });
 
-    const sub = await prisma.subscription.findUnique({ where: { userId: user.id } });
-    const subActive = !!sub && sub.status === "active" && sub.until > new Date();
+  // ---- Share (deep link + hisob) ----
+  app.post("/api/share", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const contentId = Number((req.body as { contentId?: number })?.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    await prisma.content.update({ where: { id: contentId }, data: { shareCount: { increment: 1 } } }).catch(() => {});
+    const u = botUsername();
+    return { link: u ? `https://t.me/${u}?startapp=c${contentId}` : "" };
+  });
+
+  // ---- Ko'rishni hisoblash ----
+  app.post("/api/view", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    const contentId = Number((req.body as { contentId?: number })?.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    const user = tg ? await prisma.user.findUnique({ where: { telegramId: tg.id } }) : null;
+    await prisma.view.create({ data: { contentId, userId: user?.id ?? null } });
+    await prisma.content.update({ where: { id: contentId }, data: { viewCount: { increment: 1 } } });
+    return { ok: true };
+  });
+
+  // ---- Profil: balans, mening kontentim, saqlanganlar ----
+  app.post("/api/me", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const user = await getUser(tg);
     const bal = await creatorBalance(user.id);
     const list = await prisma.content.findMany({ where: { creatorId: user.id }, orderBy: { id: "desc" }, take: 50 });
     const earned = await prisma.unlock.groupBy({
@@ -149,12 +187,14 @@ export function buildServer() {
       where: { content: { creatorId: user.id } },
     });
     const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarned ?? 0]));
-
+    const savedRows = await prisma.savedItem.findMany({
+      where: { userId: user.id },
+      include: { content: true },
+      orderBy: { id: "desc" },
+      take: 50,
+    });
     return {
       user: { firstName: user.firstName, username: user.username },
-      subscription: { active: subActive, until: subActive ? sub!.until.toISOString() : null },
-      subPriceStars: config.subPriceStars,
-      subDays: config.subDays,
       balance: bal,
       minWithdraw: config.minWithdrawStars,
       creatorShare: config.creatorSharePercent,
@@ -164,73 +204,62 @@ export function buildServer() {
         status: c.status,
         views: c.viewCount,
         unlocks: c.unlockCount,
+        likes: c.likeCount,
         earned: em.get(c.id) ?? 0,
       })),
+      saved: savedRows.map((s) => ({ id: s.content.id, title: s.content.title, priceStars: s.content.priceStars })),
     };
   });
 
-  // ---- Payout so'rovi (Mini App) ----
+  // ---- Payout so'rovi ----
   app.post("/api/withdraw", async (req, reply) => {
-    const initData = (req.headers["x-init-data"] as string) || "";
-    const tg = validateInitData(initData);
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     return requestPayout(tg.id);
   });
 
   // ---- Video yuklash (Mini App, multipart) ----
   app.post("/api/upload", async (req, reply) => {
-    const initData = (req.headers["x-init-data"] as string) || "";
-    const tg = validateInitData(initData);
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
 
     const fields: Record<string, string> = {};
     const files: Record<string, { buffer: Buffer; filename: string }> = {};
     for await (const part of req.parts()) {
-      if (part.type === "file") {
-        files[part.fieldname] = { buffer: await part.toBuffer(), filename: part.filename || "video.mp4" };
-      } else {
-        fields[part.fieldname] = String(part.value);
-      }
+      if (part.type === "file") files[part.fieldname] = { buffer: await part.toBuffer(), filename: part.filename || "video.mp4" };
+      else fields[part.fieldname] = String(part.value);
     }
-
     if (!files.reel || !files.video) return reply.code(400).send({ error: "reel va to'liq video kerak" });
     const title = (fields.title ?? "").trim();
     const price = Math.max(0, parseInt(fields.price ?? "0", 10) || 0);
     if (!title) return reply.code(400).send({ error: "sarlavha kerak" });
 
     try {
-      const content = await ingestCreatorUpload(tg.id, files.reel, files.video, title, price);
+      const content = await createContent(
+        tg.id,
+        { buffer: files.reel.buffer },
+        { buffer: files.video.buffer },
+        title,
+        price,
+        false,
+      );
+      await notifyAdminsNewContent(content, "@" + (tg.username ?? tg.id));
       return { status: "pending", id: content.id };
     } catch (e) {
-      return reply.code(500).send({ error: "Yuklashda xatolik (fayl juda katta bo'lishi mumkin — max 50MB)" });
+      return reply.code(500).send({ error: "Yuklashda xatolik (fayl juda katta yoki S3 sozlanmagan bo'lishi mumkin)" });
     }
   });
 
-  // ---- Ko'rishni hisoblash ----
-  app.post("/api/view", async (req, reply) => {
-    const initData = (req.headers["x-init-data"] as string) || "";
-    const tg = validateInitData(initData);
-    const body = (req.body ?? {}) as { contentId?: number };
-    const contentId = Number(body.contentId);
-    if (!contentId) return reply.code(400).send({ error: "contentId required" });
-    const user = tg ? await prisma.user.findUnique({ where: { telegramId: tg.id } }) : null;
-    await prisma.view.create({ data: { contentId, userId: user?.id ?? null } });
-    await prisma.content.update({ where: { id: contentId }, data: { viewCount: { increment: 1 } } });
-    return { ok: true };
-  });
-
-  // ---- Reel media proxy (qisqa videoni Telegram'dan oqim qilib beradi) ----
+  // ---- Reel media proxy (S3 sozlanmaganda Telegram'dan oqim) ----
   app.get("/media/reel/:id", async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const content = await prisma.content.findFirst({ where: { id, status: "published" } });
     if (!content?.reelFileId) return reply.code(404).send("not found");
-
     const file = await bot.api.getFile(content.reelFileId);
     if (!file.file_path) return reply.code(404).send("no file");
     const url = `https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`;
     const tgResp = await fetch(url);
     if (!tgResp.ok || !tgResp.body) return reply.code(502).send("upstream error");
-
     reply.header("Content-Type", "video/mp4");
     reply.header("Cache-Control", "public, max-age=86400");
     return reply.send(Readable.fromWeb(tgResp.body as unknown as Parameters<typeof Readable.fromWeb>[0]));

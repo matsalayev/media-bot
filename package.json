@@ -12,6 +12,7 @@
     "db:push": "prisma db push"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.0",
     "@fastify/multipart": "^8.3.0",
     "@prisma/client": "^5.22.0",
     "dotenv": "^16.4.5",

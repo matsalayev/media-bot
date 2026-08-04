@@ -19,19 +19,21 @@ model User {
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  unlocks      Unlock[]
-  views        View[]
-  uploads      Content[]     @relation("creator")
-  subscription Subscription?
-  payouts      Payout[]
+  unlocks Unlock[]
+  views   View[]
+  uploads Content[]     @relation("creator")
+  likes   ContentLike[]
+  saves   SavedItem[]
+  payouts Payout[]
 }
 
 model Content {
   id              Int      @id @default(autoincrement())
   title           String
   description     String?
-  reelFileId      String? // qisqa REELS videoning Telegram file_id'si (Mini App'da ko'rsatiladi)
-  videoFileId     String? // TO'LIQ videoning file_id'si (ochilganda chatga yuboriladi)
+  reelUrl         String? // qisqa REELS videoning AWS S3 (yoki CDN) URL'i — Mini App'da stream qilinadi
+  reelFileId      String? // fallback: reel Telegram file_id (S3 sozlanmagan bo'lsa)
+  videoFileId     String? // TO'LIQ videoning file_id'si (yopiq storage kanalda; unlock'da chatga yuboriladi)
   priceStars      Int      @default(0) // 0 = bepul, >0 = Stars evaziga ochiladi
   status          String   @default("draft") // draft | pending | published | rejected
   rejectionReason String?
@@ -39,22 +41,51 @@ model Content {
   creator         User?    @relation("creator", fields: [creatorId], references: [id])
   viewCount       Int      @default(0)
   unlockCount     Int      @default(0)
+  likeCount       Int      @default(0)
+  saveCount       Int      @default(0)
+  shareCount      Int      @default(0)
   createdAt       DateTime @default(now())
 
   unlocks Unlock[]
   views   View[]
+  likes   ContentLike[]
+  saves   SavedItem[]
 }
 
 model Unlock {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  contentId    Int
-  source       String   @default("stars") // stars | subscription | free
-  starsPaid    Int      @default(0)
-  creatorEarned Int     @default(0) // creator ulushi (Stars)
-  platformFee  Int      @default(0) // platforma komissiyasi (Stars)
-  chargeId     String? // telegram_payment_charge_id (refund uchun)
-  createdAt    DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  contentId     Int
+  source        String   @default("stars") // stars | free
+  starsPaid     Int      @default(0)
+  creatorEarned Int      @default(0) // creator ulushi (Stars)
+  platformFee   Int      @default(0) // platforma komissiyasi (Stars)
+  chargeId      String? // telegram_payment_charge_id (refund uchun)
+  createdAt     DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@unique([userId, contentId])
+}
+
+model ContentLike {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  contentId Int
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@unique([userId, contentId])
+}
+
+model SavedItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  contentId Int
+  createdAt DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id])
   content Content @relation(fields: [contentId], references: [id])
@@ -70,16 +101,6 @@ model View {
 
   user    User?   @relation(fields: [userId], references: [id])
   content Content @relation(fields: [contentId], references: [id])
-}
-
-model Subscription {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @unique
-  status    String   @default("active") // active | expired | canceled
-  until     DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
 }
 
 model Payout {

@@ -1,6 +1,8 @@
 import { Bot, Context, InlineKeyboard, InputFile, session, SessionFlavor } from "grammy";
+import { randomUUID } from "crypto";
 import { config, assertBotConfig } from "./config";
 import { prisma } from "./db";
+import { s3Enabled, uploadReelToS3 } from "./storage";
 
 interface Draft {
   reelFileId?: string;
@@ -48,7 +50,9 @@ async function notifyAdmins(text: string, keyboard?: InlineKeyboard): Promise<vo
   }
 }
 
-export async function creatorBalance(creatorUserId: number): Promise<{ earned: number; reserved: number; available: number }> {
+export async function creatorBalance(
+  creatorUserId: number,
+): Promise<{ earned: number; reserved: number; available: number }> {
   const agg = await prisma.unlock.aggregate({
     _sum: { creatorEarned: true },
     where: { content: { creatorId: creatorUserId } },
@@ -62,10 +66,85 @@ export async function creatorBalance(creatorUserId: number): Promise<{ earned: n
   return { earned, reserved, available: earned - reserved };
 }
 
-/**
- * Kontentni foydalanuvchi chatiga yetkazadi (to'liq video file_id orqali).
- * Paid unlock bo'lsa creator ulushi va platforma komissiyasini hisoblab yozadi.
- */
+// ---------------- Storage yordamchilari (S3 reels + Telegram to'liq video) ----------------
+
+async function downloadTelegramFile(fileId: string): Promise<Buffer> {
+  const file = await bot.api.getFile(fileId);
+  if (!file.file_path) throw new Error("file_path yo'q");
+  const url = `https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error("Telegram fayl yuklab bo'lmadi");
+  return Buffer.from(await resp.arrayBuffer());
+}
+
+async function sendVideoGetFileId(chatId: string | number, buffer: Buffer, filename: string): Promise<string> {
+  const msg = await bot.api.sendVideo(chatId, new InputFile(buffer, filename));
+  if (!msg.video) throw new Error("file_id olinmadi");
+  return msg.video.file_id;
+}
+
+/** Reel'ni saqlaydi: S3 sozlangan bo'lsa S3 URL, aks holda Telegram file_id. */
+async function storeReel(source: { buffer?: Buffer; fileId?: string }): Promise<{
+  reelUrl: string | null;
+  reelFileId: string | null;
+}> {
+  if (s3Enabled()) {
+    const buf = source.buffer ?? (source.fileId ? await downloadTelegramFile(source.fileId) : null);
+    if (buf) {
+      const url = await uploadReelToS3(buf, `reels/${randomUUID()}.mp4`);
+      return { reelUrl: url, reelFileId: null };
+    }
+  }
+  if (source.fileId) return { reelUrl: null, reelFileId: source.fileId };
+  if (source.buffer) {
+    const target = config.storageChannelId || config.adminIds[0];
+    if (target) return { reelUrl: null, reelFileId: await sendVideoGetFileId(target, source.buffer, "reel.mp4") };
+  }
+  return { reelUrl: null, reelFileId: null };
+}
+
+/** To'liq videoni yopiq storage kanal/guruxga yuboradi va file_id qaytaradi. */
+async function storeFullVideo(source: { buffer?: Buffer; fileId?: string }): Promise<string | null> {
+  const target = config.storageChannelId || config.adminIds[0];
+  if (!target) return source.fileId ?? null;
+  if (source.buffer) return sendVideoGetFileId(target, source.buffer, "video.mp4");
+  if (source.fileId) {
+    const msg = await bot.api.sendVideo(target, source.fileId).catch(() => null);
+    return msg?.video?.file_id ?? source.fileId;
+  }
+  return null;
+}
+
+/** Yagona kontent yaratish yo'li (bot va Mini App API uchun). */
+export async function createContent(
+  uploaderTelegramId: string,
+  reel: { buffer?: Buffer; fileId?: string },
+  video: { buffer?: Buffer; fileId?: string },
+  title: string,
+  price: number,
+  publish: boolean,
+) {
+  const { reelUrl, reelFileId } = await storeReel(reel);
+  const videoFileId = await storeFullVideo(video);
+  const creator = await prisma.user.upsert({
+    where: { telegramId: uploaderTelegramId },
+    update: {},
+    create: { telegramId: uploaderTelegramId, isAdmin: isAdmin(uploaderTelegramId) },
+  });
+  return prisma.content.create({
+    data: {
+      title,
+      reelUrl,
+      reelFileId,
+      videoFileId,
+      priceStars: price,
+      status: publish ? "published" : "pending",
+      creatorId: creator.id,
+    },
+  });
+}
+
+/** Kontentni foydalanuvchi chatiga yetkazadi (to'liq video). Paid unlock'da creator ulushini yozadi. */
 export async function deliverContent(
   telegramId: string,
   contentId: number,
@@ -99,11 +178,7 @@ export async function deliverContent(
   return true;
 }
 
-/** Telegram Stars invoice havolasini yaratadi (paid-unlock uchun). */
-export async function createStarsInvoiceLink(
-  contentId: number,
-  buyerTelegramId: string,
-): Promise<string> {
+export async function createStarsInvoiceLink(contentId: number, buyerTelegramId: string): Promise<string> {
   const content = await prisma.content.findUnique({ where: { id: contentId } });
   if (!content) throw new Error("content not found");
   const payload = JSON.stringify({ t: "unlock", contentId, buyer: buyerTelegramId });
@@ -111,61 +186,25 @@ export async function createStarsInvoiceLink(
     content.title,
     content.description ?? "Kontentni ochish",
     payload,
-    "", // provider_token — Telegram Stars uchun bo'sh
-    "XTR", // Stars valyutasi
+    "",
+    "XTR",
     [{ label: content.title.slice(0, 32) || "Access", amount: content.priceStars }],
   );
 }
 
-/** Obuna uchun Stars invoice havolasi (Mini App'da openInvoice bilan ochiladi). */
-export async function createSubscriptionInvoiceLink(buyerTelegramId: string): Promise<string> {
-  const payload = JSON.stringify({ t: "subscribe", buyer: buyerTelegramId });
-  return bot.api.createInvoiceLink(
-    "Obuna",
-    `${config.subDays} kunlik obuna — barcha kontentni cheksiz ochish`,
-    payload,
-    "",
-    "XTR",
-    [{ label: `${config.subDays} kunlik obuna`, amount: config.subPriceStars }],
-  );
-}
-
-/** Obunani faollashtiradi yoki mavjudini uzaytiradi. */
-export async function activateSubscription(telegramId: string): Promise<Date | null> {
-  const user = await prisma.user.findUnique({ where: { telegramId } });
-  if (!user) return null;
-  const now = new Date();
-  const existing = await prisma.subscription.findUnique({ where: { userId: user.id } });
-  const base = existing && existing.until > now ? existing.until : now;
-  const until = new Date(base.getTime() + config.subDays * 24 * 60 * 60 * 1000);
-  await prisma.subscription.upsert({
-    where: { userId: user.id },
-    update: { status: "active", until },
-    create: { userId: user.id, status: "active", until },
-  });
-  return until;
-}
-
-// ---------------- Creator: notify / upload / payout yordamchilari ----------------
-
-async function sendVideoGetFileId(chatId: string | number, buffer: Buffer, filename: string): Promise<string> {
-  const msg = await bot.api.sendVideo(chatId, new InputFile(buffer, filename));
-  if (!msg.video) throw new Error("file_id olinmadi");
-  return msg.video.file_id;
-}
-
 export async function notifyAdminsNewContent(
-  content: { id: number; title: string; priceStars: number; reelFileId: string | null },
+  content: { id: number; title: string; priceStars: number; reelUrl: string | null; reelFileId: string | null },
   authorLabel: string,
 ): Promise<void> {
   const kb = new InlineKeyboard()
     .text("✅ Tasdiqlash", `approve:${content.id}`)
     .text("❌ Rad etish", `reject:${content.id}`);
   const cap = `🆕 Yangi kontent #${content.id}\n«${content.title}» — ${content.priceStars === 0 ? "bepul" : content.priceStars + " ⭐"}\nMuallif: ${authorLabel}`;
+  const preview = content.reelUrl || content.reelFileId;
   for (const adminId of config.adminIds) {
-    if (content.reelFileId) {
+    if (preview) {
       await bot.api
-        .sendVideo(adminId, content.reelFileId, { caption: cap, reply_markup: kb })
+        .sendVideo(adminId, preview, { caption: cap, reply_markup: kb })
         .catch(() => bot.api.sendMessage(adminId, cap, { reply_markup: kb }).catch(() => {}));
     } else {
       await bot.api.sendMessage(adminId, cap, { reply_markup: kb }).catch(() => {});
@@ -173,30 +212,6 @@ export async function notifyAdminsNewContent(
   }
 }
 
-/** Mini App orqali yuklangan videolarni Telegram'ga yuborib file_id oladi va pending kontent yaratadi. */
-export async function ingestCreatorUpload(
-  uploaderTelegramId: string,
-  reel: { buffer: Buffer; filename: string },
-  video: { buffer: Buffer; filename: string },
-  title: string,
-  price: number,
-) {
-  const storageChat = config.storageChannelId || config.adminIds[0] || uploaderTelegramId;
-  const reelFileId = await sendVideoGetFileId(storageChat, reel.buffer, reel.filename || "reel.mp4");
-  const videoFileId = await sendVideoGetFileId(storageChat, video.buffer, video.filename || "video.mp4");
-  const creator = await prisma.user.upsert({
-    where: { telegramId: uploaderTelegramId },
-    update: {},
-    create: { telegramId: uploaderTelegramId, isAdmin: isAdmin(uploaderTelegramId) },
-  });
-  const content = await prisma.content.create({
-    data: { title, reelFileId, videoFileId, priceStars: price, status: "pending", creatorId: creator.id },
-  });
-  await notifyAdminsNewContent(content, "@" + (creator.username ?? uploaderTelegramId));
-  return content;
-}
-
-/** Payout so'rovi yaratadi (bot buyrug'i va Mini App API uchun umumiy). */
 export async function requestPayout(
   telegramId: string,
 ): Promise<{ ok: boolean; message: string; payoutId?: number; amount?: number }> {
@@ -235,7 +250,7 @@ bot.command("start", async (ctx) => {
   }
   const kb = config.webappUrl ? new InlineKeyboard().webApp("🎬 Ochish", config.webappUrl) : undefined;
   await ctx.reply(
-    "🎬 Kino'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini to'liq oching — video shu chatga yuboriladi.\n\n⭐ Cheksiz ochish: /subscribe\n💡 O'z videongizni joylab pul ishlang: /upload",
+    "🎬 Kino'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini Stars evaziga to'liq oching — video shu chatga yuboriladi.\n\n💡 O'z videongizni joylab pul ishlang: /upload",
     { reply_markup: kb },
   );
 });
@@ -244,10 +259,6 @@ bot.command("help", (ctx) =>
   ctx.reply(
     [
       "🎬 Menyudagi «Kino» tugmasi orqali ilovani oching.",
-      "",
-      "⭐ Obuna:",
-      "/subscribe — obuna bo'lish (barcha kontent cheksiz)",
-      "/mysub — obuna holatim",
       "",
       "👤 Creator (istalgan foydalanuvchi):",
       "/upload — video joylash (moderatsiyadan o'tadi)",
@@ -275,15 +286,11 @@ bot.command("add", async (ctx) => {
 });
 
 bot.command("upload", async (ctx) => {
-  if (ctx.from) {
-    await upsertUser({ id: String(ctx.from.id), username: ctx.from.username, first_name: ctx.from.first_name });
-  }
+  if (ctx.from) await upsertUser({ id: String(ctx.from.id), username: ctx.from.username, first_name: ctx.from.first_name });
   ctx.session.step = "reel";
   ctx.session.mode = "creator";
   ctx.session.draft = {};
-  await ctx.reply(
-    "🎬 Yangi video joylash.\n\n1/3 — Qisqa REELS videoni (vertikal short, 1–3 daqiqa) yuboring.\n\nBekor qilish: /cancel",
-  );
+  await ctx.reply("🎬 Yangi video joylash.\n\n1/3 — Qisqa REELS videoni (vertikal short, 1–3 daqiqa) yuboring.\n\nBekor qilish: /cancel");
 });
 
 bot.command("cancel", async (ctx) => {
@@ -294,7 +301,7 @@ bot.command("cancel", async (ctx) => {
 });
 
 bot.on("message:video", async (ctx) => {
-  if (!ctx.session.step) return; // yuklash jarayonida bo'lganlar uchun
+  if (!ctx.session.step) return;
   const fileId = ctx.message.video.file_id;
   if (ctx.session.step === "reel") {
     ctx.session.draft.reelFileId = fileId;
@@ -303,14 +310,12 @@ bot.on("message:video", async (ctx) => {
   } else if (ctx.session.step === "video") {
     ctx.session.draft.videoFileId = fileId;
     ctx.session.step = "meta";
-    await ctx.reply(
-      "3/3 — Sarlavha va narxni yuboring:\nSarlavha | narx\nMasalan:  Qiziqarli video | 50   (0 = bepul)",
-    );
+    await ctx.reply("3/3 — Sarlavha va narxni yuboring:\nSarlavha | narx\nMasalan:  Qiziqarli video | 50   (0 = bepul)");
   }
 });
 
 bot.on("message:text", async (ctx) => {
-  if (ctx.session.step !== "meta") return;
+  if (ctx.session.step !== "meta" || !ctx.from) return;
   const [titleRaw, priceRaw] = ctx.message.text.split("|");
   const title = (titleRaw ?? "").trim();
   const price = Math.max(0, parseInt((priceRaw ?? "0").trim(), 10) || 0);
@@ -320,21 +325,15 @@ bot.on("message:text", async (ctx) => {
     return ctx.reply("Ma'lumot to'liq emas. /upload bilan qaytadan boshlang.");
   }
 
-  const creator = ctx.from
-    ? await upsertUser({ id: String(ctx.from.id), username: ctx.from.username, first_name: ctx.from.first_name })
-    : null;
-
-  const status = mode === "admin" ? "published" : "pending";
-  const content = await prisma.content.create({
-    data: {
-      title,
-      reelFileId: d.reelFileId,
-      videoFileId: d.videoFileId,
-      priceStars: price,
-      status,
-      creatorId: creator?.id,
-    },
-  });
+  await ctx.reply("⏳ Saqlanmoqda…");
+  const content = await createContent(
+    String(ctx.from.id),
+    { fileId: d.reelFileId },
+    { fileId: d.videoFileId },
+    title,
+    price,
+    mode === "admin",
+  );
 
   ctx.session.step = undefined;
   ctx.session.mode = undefined;
@@ -343,10 +342,8 @@ bot.on("message:text", async (ctx) => {
   if (mode === "admin") {
     await ctx.reply(`✅ Nashr qilindi: «${content.title}» (${price === 0 ? "bepul" : price + " ⭐"}). ID: ${content.id}`);
   } else {
-    await ctx.reply(
-      `✅ «${content.title}» qabul qilindi va moderatsiyaga yuborildi.\nTasdiqlangач feed'da paydo bo'ladi. Statistika: /mycontent`,
-    );
-    await notifyAdminsNewContent(content, "@" + (ctx.from?.username ?? ctx.from?.id));
+    await ctx.reply(`✅ «${content.title}» qabul qilindi va moderatsiyaga yuborildi.\nStatistika: /mycontent`);
+    await notifyAdminsNewContent(content, "@" + (ctx.from.username ?? ctx.from.id));
   }
 });
 
@@ -361,10 +358,9 @@ bot.command("pending", async (ctx) => {
       .text("✅ Tasdiqlash", `approve:${c.id}`)
       .text("❌ Rad etish", `reject:${c.id}`);
     const cap = `#${c.id} «${c.title}» — ${c.priceStars === 0 ? "bepul" : c.priceStars + " ⭐"}`;
-    if (c.reelFileId) {
-      await ctx.replyWithVideo(c.reelFileId, { caption: cap, reply_markup: kb }).catch(() =>
-        ctx.reply(cap, { reply_markup: kb }),
-      );
+    const preview = c.reelUrl || c.reelFileId;
+    if (preview) {
+      await ctx.replyWithVideo(preview, { caption: cap, reply_markup: kb }).catch(() => ctx.reply(cap, { reply_markup: kb }));
     } else {
       await ctx.reply(cap, { reply_markup: kb });
     }
@@ -379,11 +375,7 @@ bot.callbackQuery(/^approve:(\d+)$/, async (ctx) => {
   await ctx.editMessageReplyMarkup().catch(() => {});
   if (content.creatorId) {
     const creator = await prisma.user.findUnique({ where: { id: content.creatorId } });
-    if (creator) {
-      await bot.api
-        .sendMessage(creator.telegramId, `✅ «${content.title}» tasdiqlandi va endi feed'da! Statistika: /mycontent`)
-        .catch(() => {});
-    }
+    if (creator) await bot.api.sendMessage(creator.telegramId, `✅ «${content.title}» tasdiqlandi va endi feed'da!`).catch(() => {});
   }
 });
 
@@ -395,11 +387,7 @@ bot.callbackQuery(/^reject:(\d+)$/, async (ctx) => {
   await ctx.editMessageReplyMarkup().catch(() => {});
   if (content.creatorId) {
     const creator = await prisma.user.findUnique({ where: { id: content.creatorId } });
-    if (creator) {
-      await bot.api
-        .sendMessage(creator.telegramId, `❌ «${content.title}» kontentingiz rad etildi. Qoidalarga mos videoni /upload orqali qayta yuboring.`)
-        .catch(() => {});
-    }
+    if (creator) await bot.api.sendMessage(creator.telegramId, `❌ «${content.title}» kontentingiz rad etildi.`).catch(() => {});
   }
 });
 
@@ -419,7 +407,7 @@ bot.command("mycontent", async (ctx) => {
   const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarned ?? 0]));
   const emoji = (s: string) => (s === "published" ? "🟢" : s === "pending" ? "🟡" : s === "rejected" ? "🔴" : "⚪");
   const lines = list.map(
-    (c) => `${emoji(c.status)} «${c.title}» — 👁 ${c.viewCount} · 🔓 ${c.unlockCount} · 💰 ${em.get(c.id) ?? 0} ⭐`,
+    (c) => `${emoji(c.status)} «${c.title}» — 👁 ${c.viewCount} · 🔓 ${c.unlockCount} · ❤️ ${c.likeCount} · 💰 ${em.get(c.id) ?? 0} ⭐`,
   );
   await ctx.reply("📂 Sizning kontentingiz:\n\n" + lines.join("\n") + "\n\nDaromad: /earnings");
 });
@@ -483,9 +471,7 @@ bot.callbackQuery(/^payout_paid:(\d+)$/, async (ctx) => {
   await prisma.payout.update({ where: { id }, data: { status: "paid" } });
   await ctx.answerCallbackQuery("✅ To'langan deb belgilandi");
   await ctx.editMessageReplyMarkup().catch(() => {});
-  await bot.api
-    .sendMessage(p.user.telegramId, `✅ Payout #${p.id}: ${p.amountStars} ⭐ to'landi. Rahmat!`)
-    .catch(() => {});
+  await bot.api.sendMessage(p.user.telegramId, `✅ Payout #${p.id}: ${p.amountStars} ⭐ to'landi. Rahmat!`).catch(() => {});
 });
 
 bot.callbackQuery(/^payout_reject:(\d+)$/, async (ctx) => {
@@ -500,33 +486,7 @@ bot.callbackQuery(/^payout_reject:(\d+)$/, async (ctx) => {
   await prisma.payout.update({ where: { id }, data: { status: "rejected" } });
   await ctx.answerCallbackQuery("❌ Rad etildi");
   await ctx.editMessageReplyMarkup().catch(() => {});
-  await bot.api
-    .sendMessage(p.user.telegramId, `❌ Payout #${p.id} rad etildi. ${p.amountStars} ⭐ balansingizga qaytdi.`)
-    .catch(() => {});
-});
-
-// ---------------- Obuna ----------------
-
-bot.command("subscribe", async (ctx) => {
-  if (!ctx.from) return;
-  await upsertUser({ id: String(ctx.from.id), username: ctx.from.username, first_name: ctx.from.first_name });
-  const link = await createSubscriptionInvoiceLink(String(ctx.from.id));
-  await ctx.reply(
-    `⭐ Obuna — ${config.subPriceStars} ⭐ / ${config.subDays} kun\nBarcha kontentni cheksiz ochish.`,
-    { reply_markup: new InlineKeyboard().url("💳 To'lash", link) },
-  );
-});
-
-bot.command("mysub", async (ctx) => {
-  if (!ctx.from) return;
-  const user = await prisma.user.findUnique({ where: { telegramId: String(ctx.from.id) } });
-  const sub = user ? await prisma.subscription.findUnique({ where: { userId: user.id } }) : null;
-  const active = !!sub && sub.status === "active" && sub.until > new Date();
-  if (active) {
-    await ctx.reply(`✅ Obunangiz faol.\nAmal qiladi: ${sub!.until.toISOString().slice(0, 10)} gacha.`);
-  } else {
-    await ctx.reply(`Sizda faol obuna yo'q.\n\nObuna bo'lish: /subscribe (${config.subPriceStars} ⭐ / ${config.subDays} kun)`);
-  }
+  await bot.api.sendMessage(p.user.telegramId, `❌ Payout #${p.id} rad etildi. ${p.amountStars} ⭐ balansingizga qaytdi.`).catch(() => {});
 });
 
 // ---------------- To'lovlar (Telegram Stars) ----------------
@@ -542,19 +502,8 @@ bot.on("message:successful_payment", async (ctx) => {
     return;
   }
   if (payload?.t === "unlock" && payload.contentId && ctx.from) {
-    await deliverContent(
-      String(ctx.from.id),
-      Number(payload.contentId),
-      "stars",
-      sp.total_amount,
-      sp.telegram_payment_charge_id,
-    );
+    await deliverContent(String(ctx.from.id), Number(payload.contentId), "stars", sp.total_amount, sp.telegram_payment_charge_id);
     await ctx.reply("✅ To'lov qabul qilindi — video shu chatga yuborildi.");
-  } else if (payload?.t === "subscribe" && ctx.from) {
-    const until = await activateSubscription(String(ctx.from.id));
-    await ctx.reply(
-      `✅ Obuna faollashtirildi${until ? " — " + until.toISOString().slice(0, 10) + " gacha" : ""}!\nEndi barcha kontentni cheksiz ochishingiz mumkin.`,
-    );
   }
 });
 
