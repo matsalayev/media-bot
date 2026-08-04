@@ -264,8 +264,8 @@ bot.on("message:video", async (ctx) => {
   }
 });
 
-bot.on("message:text", async (ctx) => {
-  if (ctx.session.step !== "meta" || !ctx.from) return;
+bot.on("message:text", async (ctx, next) => {
+  if (ctx.session.step !== "meta" || !ctx.from) return next(); // buyruqlar keyingi ishlovchilarga o'tsin
   const lang = await userLang(String(ctx.from.id));
   const [titleRaw, priceRaw] = ctx.message.text.split("|");
   const title = (titleRaw ?? "").trim();
