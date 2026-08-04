@@ -12,6 +12,7 @@ if (tg) {
 const initData = (tg && tg.initData) || "";
 const HEADERS = { "Content-Type": "application/json", "X-Init-Data": initData };
 const enc = encodeURIComponent;
+let tcui = null; // TON Connect UI (lazy)
 
 // ---------------- i18n ----------------
 const UI = {
@@ -28,6 +29,7 @@ const UI = {
     uploading: "Yuklanmoqda…", uploadedOk: "✅ Joylandi!", errGeneric: "Xatolik yuz berdi", free: "bepul",
     walletTitle: "TON hamyon (USDT olish uchun)", walletPlaceholder: "TON manzil (UQ… yoki EQ…)", walletSave: "Saqlash",
     walletSavedToast: "✅ Hamyon saqlandi", walletNeeded: "Avval TON hamyon manzilingizni saqlang", withdrawing: "Yuborilmoqda…",
+    paymentPending: "⏳ To'lov tekshirilmoqda… (chatingizga yuboriladi)", walletErr: "Hamyon ulanmadi", needTonGas: "To'lov uchun hamyonda ozroq TON (gaz) bo'lishi kerak",
   },
   ru: {
     profile: "Профиль", myContent: "Мои видео", liked: "Понравившиеся", saved: "Сохранённые",
@@ -42,6 +44,7 @@ const UI = {
     uploading: "Загрузка…", uploadedOk: "✅ Опубликовано!", errGeneric: "Произошла ошибка", free: "бесплатно",
     walletTitle: "TON кошелёк (для получения USDT)", walletPlaceholder: "TON адрес (UQ… или EQ…)", walletSave: "Сохранить",
     walletSavedToast: "✅ Кошелёк сохранён", walletNeeded: "Сначала сохраните адрес TON кошелька", withdrawing: "Отправка…",
+    paymentPending: "⏳ Проверяем оплату… (придёт в чат)", walletErr: "Кошелёк не подключён", needTonGas: "Для оплаты нужно немного TON (газ) на кошельке",
   },
   en: {
     profile: "Profile", myContent: "My content", liked: "Liked", saved: "Saved",
@@ -56,6 +59,7 @@ const UI = {
     uploading: "Uploading…", uploadedOk: "✅ Published!", errGeneric: "Something went wrong", free: "free",
     walletTitle: "TON wallet (to receive USDT)", walletPlaceholder: "TON address (UQ… or EQ…)", walletSave: "Save",
     walletSavedToast: "✅ Wallet saved", walletNeeded: "Save your TON wallet address first", withdrawing: "Sending…",
+    paymentPending: "⏳ Verifying payment… (sent to your chat)", walletErr: "Wallet not connected", needTonGas: "You need a little TON (gas) in your wallet to pay",
   },
 };
 let LANG = "uz";
@@ -116,8 +120,8 @@ function hintEl(text) {
 
 // ---------------- Reels feed ----------------
 function watchLabel(it) {
-  if (it.unlocked || it.priceStars === 0) return "▶ " + L("watchFull");
-  return "⭐ " + it.priceStars + " — " + L("unlock");
+  if (it.unlocked || it.priceUsdt === 0) return "▶ " + L("watchFull");
+  return "💎 $" + usd(it.priceUsdt) + " — " + L("unlock");
 }
 
 function renderReel(it) {
@@ -229,31 +233,98 @@ async function shareReel(it, btn) {
   }
 }
 
+function getTC() {
+  if (tcui) return tcui;
+  if (!window.TON_CONNECT_UI) return null;
+  try {
+    tcui = new window.TON_CONNECT_UI.TonConnectUI({ manifestUrl: location.origin + "/tonconnect-manifest.json" });
+  } catch (e) {
+    return null;
+  }
+  return tcui;
+}
+
 async function unlock(it, btn) {
+  if (it.unlocked || it.priceUsdt === 0) return deliverFree(it, btn);
+  return buyCrypto(it, btn);
+}
+
+// Bepul yoki allaqachon ochilgan — chatga yuborish
+async function deliverFree(it, btn) {
   btn.disabled = true;
   try {
     const r = await fetch("/api/unlock", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) });
     const d = await r.json();
-    if (d.status === "delivered") {
-      toast(L("sentToChat"));
-    } else if (d.status === "invoice" && d.invoiceLink && tg && tg.openInvoice) {
-      tg.openInvoice(d.invoiceLink, (status) => {
-        if (status === "paid") {
-          toast(L("sentToChat"));
-          it.unlocked = true;
-          btn.textContent = watchLabel(it);
-        } else if (status === "failed") {
-          toast(L("paymentFailed"));
-        }
-      });
-    } else {
-      toast(L("errGeneric"));
-    }
+    if (d.status === "delivered") toast(L("sentToChat"));
+    else toast(L("errGeneric"));
   } catch (e) {
     toast(L("connErr"));
   } finally {
     btn.disabled = false;
   }
+}
+
+// Pullik — USDT (TON Connect) orqali sotib olish
+async function buyCrypto(it, btn) {
+  const tc = getTC();
+  if (!tc) return toast(L("walletErr"));
+  btn.disabled = true;
+  try {
+    if (!tc.connected) await tc.connectWallet();
+    const addr = tc.account && tc.account.address;
+    if (!addr) {
+      toast(L("walletErr"));
+      btn.disabled = false;
+      return;
+    }
+    const r = await fetch("/api/order", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id, address: addr }) });
+    const d = await r.json();
+    if (d.status === "already") {
+      it.unlocked = true;
+      btn.textContent = watchLabel(it);
+      return deliverFree(it, btn);
+    }
+    if (d.status !== "ok") {
+      toast(d.error || L("errGeneric"));
+      btn.disabled = false;
+      return;
+    }
+    await tc.sendTransaction({
+      validUntil: Math.floor(Date.now() / 1000) + 600,
+      messages: [{ address: d.toJettonWallet, amount: d.amountTon, payload: d.payloadBase64 }],
+    });
+    toast(L("paymentPending"));
+    pollOrder(d.nonce, it, btn, 0);
+  } catch (e) {
+    toast(L("paymentFailed"));
+    btn.disabled = false;
+  }
+}
+
+function pollOrder(nonce, it, btn, tries) {
+  if (tries > 45) {
+    btn.disabled = false;
+    return;
+  }
+  setTimeout(async () => {
+    try {
+      const r = await fetch("/api/order/status", { method: "POST", headers: HEADERS, body: JSON.stringify({ nonce }) });
+      const d = await r.json();
+      if (d.status === "paid") {
+        it.unlocked = true;
+        btn.textContent = watchLabel(it);
+        btn.disabled = false;
+        toast(L("sentToChat"));
+        return;
+      }
+      if (d.status === "expired") {
+        toast(L("paymentFailed"));
+        btn.disabled = false;
+        return;
+      }
+    } catch (e) {}
+    pollOrder(nonce, it, btn, tries + 1);
+  }, 4000);
 }
 
 const seen = new Set();
@@ -352,7 +423,7 @@ function simpleList(container, rows, emptyKey) {
     row.style.cursor = "pointer";
     row.innerHTML =
       '<span class="row-title">' + escapeHtml(it.title) + "</span>" +
-      '<span class="row-stats">' + (it.priceStars > 0 ? it.priceStars + "⭐" : L("free")) + "</span>";
+      '<span class="row-stats">' + (it.priceUsdt > 0 ? "$" + usd(it.priceUsdt) : L("free")) + "</span>";
     row.addEventListener("click", () => {
       while (screenStack.length) closeTop();
       load(it.id);

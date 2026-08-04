@@ -1,6 +1,7 @@
 import { config } from "./config";
 import { bot } from "./bot";
 import { buildServer } from "./server";
+import { startPaymentWatcher } from "./watcher";
 
 async function main() {
   // 0) Bot ma'lumotini oldindan yuklash (share-link'lar uchun botInfo.username kerak)
@@ -53,6 +54,9 @@ async function main() {
   } catch (e) {
     console.warn("Buyruqlar menyusini o'rnatib bo'lmadi:", e);
   }
+
+  // 2c) USDT (TON Connect) to'lov kuzatuvchisi
+  startPaymentWatcher();
 
   // 3) Botni ishga tushirish (long polling)
   await bot.start({

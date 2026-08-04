@@ -3,13 +3,14 @@ import multipart from "@fastify/multipart";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Readable } from "stream";
+import { randomUUID } from "crypto";
 import { config } from "./config";
 import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
-import { bot, deliverContent, createStarsInvoiceLink, creatorBalance, requestPayout, createContent, setTonWallet } from "./bot";
-import { tonEnabled } from "./ton";
+import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet } from "./bot";
+import { tonEnabled, buildJettonPurchase } from "./ton";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
 
@@ -87,9 +88,9 @@ export function buildServer() {
           id: c.id,
           title: c.title,
           description: c.description,
-          priceStars: c.priceStars,
+          priceUsdt: c.priceUsdt,
           reelUrl: await reelSrc(c),
-          unlocked: unlocked.has(c.id) || c.priceStars === 0,
+          unlocked: unlocked.has(c.id) || c.priceUsdt === 0,
           liked: liked.has(c.id),
           saved: saved.has(c.id),
           likeCount: c.likeCount,
@@ -100,7 +101,7 @@ export function buildServer() {
     };
   });
 
-  // ---- Ochish / yetkazish ----
+  // ---- Ochish / yetkazish (bepul yoki allaqachon ochilgan) ----
   app.post("/api/unlock", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
@@ -115,13 +116,60 @@ export function buildServer() {
       ? await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } })
       : null;
 
-    if (content.priceStars === 0 || alreadyUnlocked) {
-      await deliverContent(tg.id, contentId, content.priceStars === 0 ? "free" : "unlock");
+    if (content.priceUsdt === 0 || alreadyUnlocked) {
+      await deliverContent(tg.id, contentId, content.priceUsdt === 0 ? "free" : "unlock");
       return { status: "delivered" };
     }
-    const invoiceLink = await createStarsInvoiceLink(contentId, tg.id);
-    return { status: "invoice", invoiceLink };
+    return { status: "needpay", priceUsdt: content.priceUsdt }; // pullik → kripto oqimi (/api/order)
   });
+
+  // ---- USDT to'lov buyurtmasi (TON Connect) ----
+  app.post("/api/order", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    if (!tonEnabled()) return reply.code(503).send({ error: "to'lov vaqtincha ishlamayapti" });
+    const body = (req.body ?? {}) as { contentId?: number; address?: string };
+    const contentId = Number(body.contentId);
+    const address = String(body.address ?? "").trim();
+    if (!contentId || !address) return reply.code(400).send({ error: "contentId va address kerak" });
+
+    const content = await prisma.content.findFirst({ where: { id: contentId, status: "published" } });
+    if (!content) return reply.code(404).send({ error: "not found" });
+    if (content.priceUsdt <= 0) return reply.code(400).send({ error: "bepul kontent" });
+    if (!content.videoFileId) return reply.code(409).send({ error: "kontent to'liq video yo'q" }); // to'lovni oldini olamiz
+
+    const user = await getUser(tg);
+    const already = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+    if (already) return { status: "already" };
+
+    const nonce = randomUUID();
+    await prisma.order.create({ data: { nonce, contentId, buyerTgId: tg.id, amountUsdt: content.priceUsdt, status: "pending" } });
+    try {
+      const txData = await buildJettonPurchase(address, content.priceUsdt, nonce);
+      return { status: "ok", nonce, amountUsdt: content.priceUsdt, ...txData };
+    } catch (e) {
+      await prisma.order.updateMany({ where: { nonce }, data: { status: "expired" } });
+      return reply.code(500).send({ error: "tranzaksiya tayyorlashda xato (manzilni tekshiring)" });
+    }
+  });
+
+  // ---- To'lov holati (buyurtma bo'yicha) ----
+  app.post("/api/order/status", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const nonce = String((req.body as { nonce?: string })?.nonce ?? "");
+    if (!nonce) return reply.code(400).send({ error: "nonce required" });
+    const order = await prisma.order.findUnique({ where: { nonce } });
+    if (!order || order.buyerTgId !== tg.id) return reply.code(404).send({ error: "not found" });
+    return { status: order.status };
+  });
+
+  // ---- TON Connect manifest ----
+  app.get("/tonconnect-manifest.json", async () => {
+    const base = (config.webappUrl || config.publicUrl || "").replace(/\/$/, "");
+    return { url: base, name: "Media", iconUrl: base + "/icon.png" };
+  });
+  app.get("/icon.png", serveFile("icon.png", "image/png"));
 
   // ---- Like (toggle) ----
   app.post("/api/like", async (req, reply) => {
@@ -223,8 +271,8 @@ export function buildServer() {
         likes: c.likeCount,
         earned: em.get(c.id) ?? 0,
       })),
-      saved: savedRows.map((s) => ({ id: s.content.id, title: s.content.title, priceStars: s.content.priceStars })),
-      liked: likedRows.map((l) => ({ id: l.content.id, title: l.content.title, priceStars: l.content.priceStars })),
+      saved: savedRows.map((s) => ({ id: s.content.id, title: s.content.title, priceUsdt: s.content.priceUsdt })),
+      liked: likedRows.map((l) => ({ id: l.content.id, title: l.content.title, priceUsdt: l.content.priceUsdt })),
     };
   });
 

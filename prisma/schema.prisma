@@ -53,6 +53,25 @@ model Content {
   views   View[]
   likes   ContentLike[]
   saves   SavedItem[]
+  orders  Order[]
+}
+
+// USDT (TON Connect) to'lov buyurtmasi — on-chain to'lovni aniqlash uchun
+model Order {
+  id         Int      @id @default(autoincrement())
+  nonce      String   @unique // to'lov comment'i (on-chain moslash uchun)
+  contentId  Int
+  buyerTgId  String
+  amountUsdt Float
+  status     String   @default("pending") // pending | paid | expired
+  txHash     String?
+  fromAddr   String?
+  attempts   Int      @default(0) // yetkazish urinishlari (idempotent retry uchun)
+  createdAt  DateTime @default(now())
+
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@index([status])
 }
 
 model Unlock {

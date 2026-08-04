@@ -24,6 +24,11 @@ export const config = {
   tonApiKey: process.env.TON_API_KEY ?? "", // toncenter API key (rate-limit uchun tavsiya)
   usdtJettonMaster: process.env.USDT_JETTON_MASTER ?? "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", // TON'dagi rasmiy USD₮
   tonWalletVersion: process.env.TON_WALLET_VERSION ?? "v5r1", // v5r1 (Tonkeeper default) | v4
+  // TON Connect USDT to'lovlari (kontent sotib olish)
+  tonapiBase: process.env.TONAPI_BASE ?? "https://tonapi.io",
+  tonapiKey: process.env.TONAPI_KEY ?? "", // ixtiyoriy (rate-limit uchun)
+  purchaseGasTon: process.env.PURCHASE_GAS_TON ?? "0.1", // xaridor biriktiradigan gaz (ortiqchasi qaytadi)
+  purchaseForwardTon: process.env.PURCHASE_FORWARD_TON ?? "0.02", // forward (comment/notification uchun)
   // TO'LIQ videolar shu yopiq kanal/gurux'ga yuboriladi (cheksiz xotira; bot admin bo'lishi kerak).
   // Bo'sh bo'lsa — birinchi admin chatiga yuboriladi.
   storageChannelId: process.env.STORAGE_CHANNEL_ID ?? "",
