@@ -507,4 +507,19 @@ bot.on("message:successful_payment", async (ctx) => {
   }
 });
 
+// Bot kanal/guruxga admin qilinganda — storage kanal ID'sini adminlarga yuboradi
+bot.on("my_chat_member", async (ctx) => {
+  const chat = ctx.chat;
+  const status = ctx.myChatMember.new_chat_member.status;
+  if (
+    (chat.type === "channel" || chat.type === "group" || chat.type === "supergroup") &&
+    (status === "administrator" || status === "member")
+  ) {
+    await notifyAdmins(
+      `📦 Bot «${("title" in chat && chat.title) || chat.id}» ga qo'shildi (holat: ${status}).\n\nSTORAGE_CHANNEL_ID uchun ID:\n${chat.id}`,
+    );
+  }
+});
+
 bot.catch((err) => console.error("Bot xatosi:", err.error));
+
