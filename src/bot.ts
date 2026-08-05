@@ -61,18 +61,27 @@ async function sendWelcome(ctx: MyContext, lang: Lang) {
   await ctx.reply(t(lang, "welcome"), { reply_markup: kb });
 }
 
+async function sendTerms(ctx: MyContext, lang: Lang) {
+  const kb = new InlineKeyboard().text(t(lang, "termsAgree"), "terms:accept");
+  await ctx.reply(t(lang, "terms"), { reply_markup: kb });
+}
+
 /** Creator balansi — USDT'da (jami ishlangan, band qilingan, mavjud). */
 export async function creatorBalance(
   creatorUserId: number,
 ): Promise<{ earned: number; reserved: number; available: number }> {
-  const agg = await prisma.unlock.aggregate({ _sum: { creatorEarnedUsdt: true }, where: { content: { creatorId: creatorUserId } } });
+  const agg = await prisma.unlock.aggregate({
+    _sum: { creatorEarnedUsdt: true },
+    where: { refunded: false, content: { creatorId: creatorUserId } }, // qaytarilganlar hisobga olinmaydi
+  });
   const earned = agg._sum.creatorEarnedUsdt ?? 0;
   const paid = await prisma.payout.aggregate({
     _sum: { amountUsdt: true },
     where: { userId: creatorUserId, status: { in: ["requested", "processing", "paid"] } },
   });
   const reserved = paid._sum.amountUsdt ?? 0;
-  return { earned, reserved, available: Math.max(0, earned - reserved) };
+  // clamp yo'q: refund clawback allaqachon yechib olingan daromaddan oshsa, defitsit kelajakdagi daromaddan qoplanadi
+  return { earned, reserved, available: earned - reserved };
 }
 
 // ---------------- Storage (S3 reels + Telegram to'liq video) ----------------
@@ -201,7 +210,11 @@ export async function deliverCryptoUnlock(
   const creatorEarnedUsdt = (amountUsdt * config.creatorSharePercent) / 100;
   const platformFeeUsdt = amountUsdt - creatorEarnedUsdt;
   await recordUnlock(user.id, contentId, { source: "usdt", creatorEarnedUsdt, platformFeeUsdt, chargeId: txHash });
-  await bot.api.sendVideo(buyerTelegramId, content.videoFileId, { caption: `🎬 ${content.title}`, supports_streaming: true });
+  await bot.api.sendVideo(buyerTelegramId, content.videoFileId, {
+    caption: `🎬 ${content.title}`,
+    supports_streaming: true,
+    reply_markup: new InlineKeyboard().text(t(normLang(user.lang), "complaintBtn"), `complain:${contentId}`), // aldov shikoyati
+  });
   return true;
 }
 
@@ -334,6 +347,112 @@ export async function reconcilePayouts(): Promise<void> {
   }
 }
 
+/** Xaridor "aldov" shikoyatini yaratadi (kontentni sotib olgan bo'lishi shart). Adminlarga xabar. */
+export async function createComplaint(
+  buyerTelegramId: string,
+  contentId: number,
+  reason?: string,
+  lang?: string,
+): Promise<{ ok: boolean; message: string; complaintId?: number }> {
+  const l = normLang(lang);
+  const user = await prisma.user.findUnique({ where: { telegramId: buyerTelegramId } });
+  if (!user) return { ok: false, message: t(l, "startFirst") };
+  const unlock = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+  if (!unlock || unlock.source !== "usdt" || unlock.refunded || unlock.creatorEarnedUsdt <= 0) {
+    return { ok: false, message: t(l, "complaintNeedBuy") };
+  }
+  const existing = await prisma.complaint.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+  if (existing) return { ok: false, message: t(l, "complaintExists") };
+  const content = await prisma.content.findUnique({ where: { id: contentId } });
+  const c = await prisma.complaint.create({
+    data: { contentId, userId: user.id, buyerTgId: buyerTelegramId, reason: reason?.slice(0, 300), status: "pending" },
+  });
+  const kb = new InlineKeyboard().text("✅ Qaytarish (refund)", `refund_ok:${c.id}`).text("❌ Rad", `refund_no:${c.id}`);
+  await notifyAdmins(
+    `🚨 Aldov shikoyati #${c.id}\nKontent #${contentId}: «${content?.title ?? ""}»\nXaridor: @${user.username ?? buyerTelegramId}\nSabab: ${reason ?? "—"}\n\nReel'ni feed'da #${contentId} da, to'liq videoni quyida ko'ring:`,
+    kb,
+  );
+  if (content?.videoFileId) {
+    for (const a of config.adminIds) await bot.api.sendVideo(a, content.videoFileId, { caption: `To'liq video (shikoyat #${c.id})` }).catch(() => {});
+  }
+  return { ok: true, message: t(l, "complaintFiled"), complaintId: c.id };
+}
+
+/** Refundни bajaradi: creator daromadini qaytarib oladi, xaridorga 90% USDT yuboradi (10% komissiya qoladi). */
+export async function processRefund(complaintId: number): Promise<{ ok: boolean; message: string }> {
+  const c = await prisma.complaint.findUnique({ where: { id: complaintId } });
+  if (!c || c.status !== "pending") return { ok: false, message: "Shikoyat topilmadi yoki allaqachon ko'rib chiqilgan." };
+  const content = await prisma.content.findUnique({ where: { id: c.contentId } });
+  const buyer = await prisma.user.findUnique({ where: { telegramId: c.buyerTgId } });
+  if (!buyer) return { ok: false, message: "Xaridor topilmadi." };
+  const unlock = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: buyer.id, contentId: c.contentId } } });
+  if (!unlock || unlock.refunded) return { ok: false, message: "Unlock topilmadi yoki allaqachon qaytarilgan." };
+  const refundUsdt = Math.round(unlock.creatorEarnedUsdt * 100) / 100; // creator ulushi = 90%
+  if (refundUsdt <= 0) return { ok: false, message: "Qaytariladigan summa 0." };
+  if (!tonEnabled()) return { ok: false, message: "TON payout sozlanmagan." };
+  const order = await prisma.order.findFirst({ where: { buyerTgId: c.buyerTgId, contentId: c.contentId, status: "paid" }, orderBy: { id: "desc" } });
+  // Buyer ulagan self-custody hamyonni afzal ko'ramiz; bo'lmasa to'lov kelgan manzil (birja bo'lishi mumkin — ehtiyot)
+  const toAddr = buyer.tonWallet || order?.fromAddr;
+  if (!toAddr) return { ok: false, message: "Xaridor hamyon manzili topilmadi — qo'lda qaytaring." };
+
+  // Atomik: shikoyat claim + clawback + refund yozuvi — hammasi birga (yarim holat qolmasin, ikki marta refund bo'lmasin)
+  let refund: { id: number };
+  try {
+    refund = await prisma.$transaction(async (tx) => {
+      const claim = await tx.complaint.updateMany({ where: { id: complaintId, status: "pending" }, data: { status: "approved" } });
+      if (claim.count !== 1) throw new Error("CLAIMED");
+      await tx.unlock.update({ where: { id: unlock.id }, data: { refunded: true, creatorEarnedUsdt: 0 } });
+      return tx.refund.create({
+        data: { contentId: c.contentId, buyerTgId: c.buyerTgId, toAddr, amountUsdt: refundUsdt, status: "processing", complaintId },
+      });
+    });
+  } catch (e) {
+    if ((e as Error).message === "CLAIMED") return { ok: false, message: "Allaqachon ko'rib chiqilgan." };
+    throw e;
+  }
+
+  try {
+    const { hash, confirmed } = await sendUsdt(toAddr, refundUsdt, "r" + refund.id);
+    await prisma.refund.updateMany({ where: { id: refund.id, status: "processing" }, data: { status: confirmed ? "paid" : "processing", txHash: hash } });
+  } catch (e) {
+    await prisma.refund.updateMany({ where: { id: refund.id, status: "processing" }, data: { status: "failed", txHash: null } });
+    await notifyAdmins(`⚠️ Refund #${refund.id} yuborishda xato — qo'lda tekshiring.\n${fmtUsd(refundUsdt)} USDT → ${toAddr}\n${String((e as Error)?.message ?? e).slice(0, 150)}`);
+  }
+
+  await bot.api
+    .sendMessage(c.buyerTgId, t(normLang(buyer.lang), "refundBuyer", { title: content?.title ?? "", amount: fmtUsd(refundUsdt) }))
+    .catch(() => {});
+  if (content?.creatorId) {
+    const creator = await prisma.user.findUnique({ where: { id: content.creatorId } });
+    if (creator) {
+      await bot.api
+        .sendMessage(creator.telegramId, t(normLang(creator.lang), "refundClawback", { title: content.title, amount: fmtUsd(refundUsdt) }))
+        .catch(() => {});
+    }
+  }
+  return { ok: true, message: `✅ Refund #${refund.id}: ${fmtUsd(refundUsdt)} USDT → ${toAddr}` };
+}
+
+/** 'processing' refundlarni on-chain tekshirib hal qiladi (payout reconcile bilan bir xil mantiq). */
+export async function reconcileRefunds(): Promise<void> {
+  const list = await prisma.refund.findMany({ where: { status: "processing" }, orderBy: { id: "asc" }, take: 50 });
+  for (const r of list) {
+    const since = Math.floor(new Date(r.createdAt).getTime() / 1000);
+    let found: { found: boolean; txHash?: string; exhausted: boolean };
+    try {
+      found = await findOutgoingUsdt(r.toAddr, r.amountUsdt, since, "r" + r.id);
+    } catch {
+      continue;
+    }
+    if (found.found) {
+      await prisma.refund.updateMany({ where: { id: r.id, status: "processing" }, data: { status: "paid", txHash: found.txHash } });
+    } else if (!found.exhausted && (Date.now() - new Date(r.createdAt).getTime()) / 60000 > 30) {
+      const upd = await prisma.refund.updateMany({ where: { id: r.id, status: "processing" }, data: { status: "failed" } });
+      if (upd.count === 1) await notifyAdmins(`⚠️ Refund #${r.id} 30 daqiqada tasdiqlanmadi → failed. Qo'lda tekshiring.\n${fmtUsd(r.amountUsdt)} USDT → ${r.toAddr}`);
+    }
+  }
+}
+
 // ==================== Buyruqlar ====================
 
 bot.command("start", async (ctx) => {
@@ -346,6 +465,8 @@ bot.command("start", async (ctx) => {
   });
   if (!user.lang) {
     await ctx.reply("Tilni tanlang / Выберите язык / Choose language:", { reply_markup: langKeyboard() });
+  } else if (!user.acceptedTerms) {
+    await sendTerms(ctx, normLang(user.lang));
   } else {
     await sendWelcome(ctx, normLang(user.lang));
   }
@@ -353,11 +474,24 @@ bot.command("start", async (ctx) => {
 
 bot.callbackQuery(/^lang:(uz|ru|en)$/, async (ctx) => {
   const lang = ctx.match[1] as Lang;
-  if (ctx.from) await prisma.user.update({ where: { telegramId: String(ctx.from.id) }, data: { lang } }).catch(() => {});
+  let u: { acceptedTerms: boolean } | null = null;
+  if (ctx.from) u = await prisma.user.update({ where: { telegramId: String(ctx.from.id) }, data: { lang } }).catch(() => null);
   await ctx.answerCallbackQuery(t(lang, "langSet"));
+  await ctx.editMessageReplyMarkup().catch(() => {});
+  if (u && !u.acceptedTerms) await sendTerms(ctx, lang);
+  else await sendWelcome(ctx, lang);
+});
+
+bot.callbackQuery("terms:accept", async (ctx) => {
+  if (!ctx.from) return;
+  const lang = await userLang(String(ctx.from.id));
+  await prisma.user.update({ where: { telegramId: String(ctx.from.id) }, data: { acceptedTerms: true } }).catch(() => {});
+  await ctx.answerCallbackQuery(t(lang, "termsAccepted"));
   await ctx.editMessageReplyMarkup().catch(() => {});
   await sendWelcome(ctx, lang);
 });
+
+bot.command("terms", async (ctx) => ctx.reply(t(await userLang(String(ctx.from?.id)), "terms")));
 
 bot.command("lang", (ctx) => ctx.reply("Tilni tanlang / Выберите язык / Choose language:", { reply_markup: langKeyboard() }));
 
@@ -453,7 +587,7 @@ bot.command("earnings", async (ctx) => {
     t(lang, "earnings", {
       earned: fmtUsd(b.earned),
       reserved: fmtUsd(b.reserved),
-      available: fmtUsd(b.available),
+      available: fmtUsd(Math.max(0, b.available)),
       min: fmtUsd(config.minWithdrawUsdt),
       share: config.creatorSharePercent,
       plat: 100 - config.creatorSharePercent,
@@ -508,6 +642,84 @@ bot.command("resolvepayout", async (ctx) => {
   if (!p || p.status !== "processing") return ctx.reply("Bunday 'processing' payout topilmadi.");
   await prisma.payout.update({ where: { id }, data: { status: st } });
   await ctx.reply(`✅ Payout #${id} → ${st}${st === "failed" ? " (balans creatorga qaytdi)" : ""}`);
+});
+
+// Muvaffaqiyatsiz refundni qayta yuborish yoki qo'lda hal qilish
+bot.command("resolverefund", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const [idRaw, action] = (ctx.match ?? "").toString().trim().split(/\s+/);
+  const id = Number(idRaw);
+  if (!id || !["resend", "paid", "failed"].includes(action)) {
+    return ctx.reply("Foydalanish: /resolverefund <id> resend|paid|failed");
+  }
+  const r = await prisma.refund.findUnique({ where: { id } });
+  if (!r) return ctx.reply("Refund topilmadi.");
+  if (action === "paid" || action === "failed") {
+    await prisma.refund.update({ where: { id }, data: { status: action } });
+    return ctx.reply(`Refund #${id} → ${action}`);
+  }
+  // resend — comment "r"+id barqaror, shuning uchun on-chain dedup ishlaydi (ikki marta emas)
+  if (r.status === "paid") return ctx.reply("Bu refund allaqachon to'langan.");
+  await ctx.reply("⏳ Qayta yuborilmoqda…");
+  try {
+    await prisma.refund.updateMany({ where: { id }, data: { status: "processing" } });
+    const { hash, confirmed } = await sendUsdt(r.toAddr, r.amountUsdt, "r" + r.id);
+    await prisma.refund.updateMany({ where: { id, status: "processing" }, data: { status: confirmed ? "paid" : "processing", txHash: hash } });
+    await ctx.reply(`Refund #${id}: ${confirmed ? "✅ to'landi" : "⏳ yuborildi, tasdiq kutilmoqda"} · ${fmtUsd(r.amountUsdt)} USDT → ${r.toAddr}`);
+  } catch (e) {
+    await prisma.refund.updateMany({ where: { id, status: "processing" }, data: { status: "failed" } });
+    await ctx.reply("❌ Qayta yuborishda xato: " + String((e as Error)?.message ?? e).slice(0, 150));
+  }
+});
+
+// ---------------- Aldov shikoyati / refund ----------------
+
+// Xaridor shikoyat qiladi (yetkazilgan video tugmasi)
+bot.callbackQuery(/^complain:(\d+)$/, async (ctx) => {
+  if (!ctx.from) return ctx.answerCallbackQuery();
+  const contentId = Number(ctx.match[1]);
+  const lang = await userLang(String(ctx.from.id));
+  const res = await createComplaint(String(ctx.from.id), contentId, undefined, lang);
+  await ctx.answerCallbackQuery({ text: res.message.slice(0, 190), show_alert: true });
+});
+
+// Admin: pulni qaytarish
+bot.callbackQuery(/^refund_ok:(\d+)$/, async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
+  const id = Number(ctx.match[1]);
+  await ctx.answerCallbackQuery("⏳ Qaytarilmoqda…");
+  await ctx.editMessageReplyMarkup().catch(() => {});
+  const res = await processRefund(id);
+  await ctx.reply(res.message);
+});
+
+// Admin: shikoyatni rad etish
+bot.callbackQuery(/^refund_no:(\d+)$/, async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
+  const id = Number(ctx.match[1]);
+  const c = await prisma.complaint.findUnique({ where: { id } });
+  if (!c || c.status !== "pending") {
+    await ctx.answerCallbackQuery("Allaqachon ko'rib chiqilgan");
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    return;
+  }
+  await prisma.complaint.update({ where: { id }, data: { status: "rejected" } });
+  await ctx.answerCallbackQuery("❌ Rad etildi");
+  await ctx.editMessageReplyMarkup().catch(() => {});
+  const content = await prisma.content.findUnique({ where: { id: c.contentId } });
+  const u = await prisma.user.findUnique({ where: { telegramId: c.buyerTgId } });
+  await bot.api.sendMessage(c.buyerTgId, t(normLang(u?.lang), "refundRejected", { title: content?.title ?? "" })).catch(() => {});
+});
+
+// Admin: kutayotgan shikoyatlar
+bot.command("complaints", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const list = await prisma.complaint.findMany({ where: { status: "pending" }, orderBy: { id: "asc" }, take: 20, include: { content: true } });
+  if (!list.length) return ctx.reply("Kutayotgan shikoyat yo'q. ✅");
+  for (const c of list) {
+    const kb = new InlineKeyboard().text("✅ Qaytarish", `refund_ok:${c.id}`).text("❌ Rad", `refund_no:${c.id}`);
+    await ctx.reply(`🚨 Shikoyat #${c.id}\n«${c.content.title}» (#${c.contentId})\nXaridor: ${c.buyerTgId}\nSabab: ${c.reason ?? "—"}`, { reply_markup: kb });
+  }
 });
 
 // Hot-wallet — to'ldirish uchun manzil va balans (admin)

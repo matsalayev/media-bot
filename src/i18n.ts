@@ -29,7 +29,7 @@ const S: Record<string, Entry> = {
     en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings (USDT)\n/wallet — link TON wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language",
   },
   adminPanel: {
-    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TON hamyonni ulash\n/withdraw — USDT'ni hamyonga yechish\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — Stars balansi + komissiya + hot-wallet\n/hotwallet — hot-wallet manzili va balansi\n/payouts — payout tarixi",
+    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TON hamyonni ulash\n/withdraw — USDT'ni hamyonga yechish\n/terms — foydalanish shartlari\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — Stars balansi + komissiya + hot-wallet\n/hotwallet — hot-wallet manzili va balansi\n/payouts — payout tarixi\n/complaints — aldov shikoyatlari\n/resolvepayout — payoutni qo'lda hal qilish",
     ru: "🛠 Админ-панель — все команды\n\n👤 Пользователь:\n/start — начать / выбрать язык\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — доход (USDT)\n/wallet — привязать TON кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык\n/help — помощь\n/cancel — отменить процесс\n\n🔑 Админ:\n/admin — эта панель\n/add — добавить видео (админ)\n/balance — баланс Stars + комиссия + hot-wallet\n/hotwallet — адрес и баланс hot-wallet\n/payouts — история выплат",
     en: "🛠 Admin panel — all commands\n\n👤 User:\n/start — start / choose language\n/upload — post a video\n/mycontent — my content\n/earnings — earnings (USDT)\n/wallet — link TON wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language\n/help — help\n/cancel — cancel the flow\n\n🔑 Admin:\n/admin — this panel\n/add — add a video (admin)\n/balance — Stars balance + commission + hot-wallet\n/hotwallet — hot-wallet address and balance\n/payouts — payout history",
   },
@@ -140,6 +140,52 @@ const S: Record<string, Entry> = {
     uz: "❌ Yechishda xatolik yuz berdi. Admin xabardor qilindi.",
     ru: "❌ Ошибка при выводе. Администратор уведомлён.",
     en: "❌ Withdrawal failed. The admin has been notified.",
+  },
+  terms: {
+    uz: "📄 Foydalanish shartlari\n\n1. Media — kontent almashish platformasi. Pullik kontent USDT (TON tarmog'i) orqali sotib olinadi.\n\n2. To'lovlar blokcheynda amalga oshadi va qaytarib bo'lmaydi — quyidagi holatdan tashqari.\n\n3. 🛡 Aldov himoyasi: agar qisqa reel to'liq videoga mos kelmasa (aldov), «⚠️ Shikoyat» tugmasi orqali murojaat qilishingiz mumkin. Admin tekshiradi; tasdiqlansa to'lovingizning 90% qaytariladi (10% tizim komissiyasi qaytarilmaydi).\n\n4. Mualliflar har sotuvdan 90% oladi, platforma 10% komissiya oladi.\n\n5. Kontent uchun javobgarlik uni joylagan muallifda. Noqonuniy yoki aldov kontent taqiqlanadi.\n\n6. Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
+    ru: "📄 Условия использования\n\n1. Media — платформа обмена контентом. Платный контент покупается за USDT (сеть TON).\n\n2. Платежи проходят в блокчейне и не возвращаются — кроме случая ниже.\n\n3. 🛡 Защита от обмана: если короткий reel не соответствует полному видео (обман), вы можете подать «⚠️ Жалобу». Админ проверит; при подтверждении вернётся 90% оплаты (10% комиссии не возвращается).\n\n4. Авторы получают 90% с каждой продажи, платформа — 10% комиссии.\n\n5. Ответственность за контент несёт автор. Незаконный или мошеннический контент запрещён.\n\n6. Безопасность вашего кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
+    en: "📄 Terms of Use\n\n1. Media is a content-sharing platform. Paid content is purchased with USDT (TON network).\n\n2. Payments settle on-chain and are non-refundable — except as below.\n\n3. 🛡 Fraud protection: if a short reel does not match the full video (bait), you may file a «⚠️ Complaint». The admin reviews it; if approved, 90% of your payment is refunded (the 10% platform commission is non-refundable).\n\n4. Creators earn 90% of each sale; the platform takes a 10% commission.\n\n5. Creators are responsible for their content. Illegal or fraudulent content is prohibited.\n\n6. The security of your wallet and keys is your own responsibility.\n\nTo continue, please accept the terms.",
+  },
+  termsAgree: { uz: "✅ Roziman", ru: "✅ Принимаю", en: "✅ I agree" },
+  termsAccepted: {
+    uz: "✅ Rahmat! Endi bemalol foydalanishingiz mumkin.",
+    ru: "✅ Спасибо! Теперь можете пользоваться.",
+    en: "✅ Thanks! You can now use the app.",
+  },
+  complaintBtn: {
+    uz: "⚠️ Shikoyat (aldov)",
+    ru: "⚠️ Жалоба (обман)",
+    en: "⚠️ Report (bait)",
+  },
+  complaintFiled: {
+    uz: "✅ Shikoyatingiz qabul qilindi. Admin tekshiradi — aldov tasdiqlansa, 90% pul qaytariladi.",
+    ru: "✅ Жалоба принята. Админ проверит — при подтверждении обмана вернётся 90%.",
+    en: "✅ Complaint received. The admin will review — if confirmed, 90% is refunded.",
+  },
+  complaintExists: {
+    uz: "Bu kontent bo'yicha shikoyatingiz allaqachon bor.",
+    ru: "По этому контенту жалоба уже есть.",
+    en: "You already have a complaint for this content.",
+  },
+  complaintNeedBuy: {
+    uz: "Shikoyat qilish uchun avval kontentni sotib olgan bo'lishingiz kerak.",
+    ru: "Чтобы пожаловаться, сначала нужно купить контент.",
+    en: "You must purchase the content before reporting it.",
+  },
+  refundBuyer: {
+    uz: "✅ «{title}» bo'yicha shikoyatingiz tasdiqlandi. {amount} USDT hamyoningizga qaytarildi.",
+    ru: "✅ Ваша жалоба по «{title}» подтверждена. {amount} USDT возвращено на кошелёк.",
+    en: "✅ Your complaint about «{title}» was approved. {amount} USDT refunded to your wallet.",
+  },
+  refundRejected: {
+    uz: "«{title}» bo'yicha shikoyatingiz ko'rib chiqildi, lekin aldov tasdiqlanmadi.",
+    ru: "Ваша жалоба по «{title}» рассмотрена, но обман не подтверждён.",
+    en: "Your complaint about «{title}» was reviewed, but bait was not confirmed.",
+  },
+  refundClawback: {
+    uz: "⚠️ «{title}» uchun aldov shikoyati tasdiqlandi. {amount} USDT balansingizdan qaytarib olindi.",
+    ru: "⚠️ Жалоба на обман по «{title}» подтверждена. {amount} USDT списано с вашего баланса.",
+    en: "⚠️ A bait complaint for «{title}» was approved. {amount} USDT was clawed back from your balance.",
   },
 };
 

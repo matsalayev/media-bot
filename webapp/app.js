@@ -32,6 +32,9 @@ const UI = {
     editVideo: "Videoni tahrirlash", save: "Saqlash", deleteBtn: "O'chirish", cancelBtn: "Bekor qilish",
     deleteAsk: "Videoni o'chirasizmi?", deleted: "🗑 O'chirildi", updated: "✅ Saqlandi",
     views: "ko'rish", sales: "sotildi", videosN: "video", earnedShort: "ishlangan", price: "Narx",
+    reportBtn: "Aldov — shikoyat qilish", reportAsk: "Bu reel to'liq videoga mos kelmadimi? Aldov shikoyati yuborilsinmi?",
+    termsTitle: "Foydalanish shartlari", termsAgree: "✅ Roziman",
+    termsText: "Media — kontent platformasi. Pullik kontent USDT (TON tarmog'i) orqali sotib olinadi.\n\n• To'lovlar blokcheynda amalga oshadi va qaytarilmaydi — aldov holatidan tashqari.\n• 🛡 Aldov himoyasi: qisqa reel to'liq videoga mos kelmasa, «⚠️ Shikoyat» qiling. Admin tasdiqlasa, to'lovingizning 90% qaytariladi (10% komissiya qaytmaydi).\n• Mualliflar har sotuvdan 90%, platforma 10% oladi.\n• Kontent uchun javobgarlik uni joylagan muallifda.\n• Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
   },
   ru: {
     navReels: "Media", navSaved: "Сохранённые", navEarning: "Доход", navProfile: "Профиль",
@@ -50,6 +53,9 @@ const UI = {
     editVideo: "Редактировать видео", save: "Сохранить", deleteBtn: "Удалить", cancelBtn: "Отмена",
     deleteAsk: "Удалить видео?", deleted: "🗑 Удалено", updated: "✅ Сохранено",
     views: "просм.", sales: "продано", videosN: "видео", earnedShort: "заработано", price: "Цена",
+    reportBtn: "Обман — пожаловаться", reportAsk: "Этот reel не соответствует полному видео? Отправить жалобу на обман?",
+    termsTitle: "Условия использования", termsAgree: "✅ Принимаю",
+    termsText: "Media — платформа контента. Платный контент покупается за USDT (сеть TON).\n\n• Платежи проходят в блокчейне и не возвращаются — кроме случая обмана.\n• 🛡 Защита от обмана: если короткий reel не соответствует полному видео, подайте «⚠️ Жалобу». При подтверждении вернётся 90% (10% комиссии не возвращается).\n• Авторы получают 90% с продажи, платформа — 10%.\n• Ответственность за контент несёт автор.\n• Безопасность кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
   },
   en: {
     navReels: "Media", navSaved: "Saved", navEarning: "Earnings", navProfile: "Profile",
@@ -68,6 +74,9 @@ const UI = {
     editVideo: "Edit video", save: "Save", deleteBtn: "Delete", cancelBtn: "Cancel",
     deleteAsk: "Delete this video?", deleted: "🗑 Deleted", updated: "✅ Saved",
     views: "views", sales: "sales", videosN: "videos", earnedShort: "earned", price: "Price",
+    reportBtn: "Report bait", reportAsk: "Doesn't this reel match the full video? Send a bait complaint?",
+    termsTitle: "Terms of Use", termsAgree: "✅ I agree",
+    termsText: "Media is a content platform. Paid content is purchased with USDT (TON network).\n\n• Payments settle on-chain and are non-refundable — except in cases of bait.\n• 🛡 Fraud protection: if a short reel doesn't match the full video, file a «⚠️ Complaint». If approved, 90% is refunded (the 10% commission is non-refundable).\n• Creators earn 90% per sale, the platform takes 10%.\n• Creators are responsible for their content.\n• The security of your wallet and keys is your own responsibility.\n\nAccept the terms to continue.",
   },
 };
 let LANG = "uz";
@@ -86,7 +95,35 @@ function localize() {
   set("doUpload", "uploadBtn");
   set("lEditTitle", "editVideo"); set("lEName", "fTitle"); set("lEPrice", "price");
   set("edSave", "save"); set("edDelete", "deleteBtn"); set("edCancel", "cancelBtn");
+  set("tgTitle", "termsTitle"); set("tgAgree", "termsAgree");
 }
+
+// ---------------- Foydalanish shartlari ----------------
+function showTerms() {
+  document.getElementById("tgText").textContent = L("termsText");
+  document.getElementById("tgTitle").textContent = L("termsTitle");
+  document.getElementById("tgAgree").textContent = L("termsAgree");
+  document.getElementById("termsGate").hidden = false;
+}
+async function acceptTerms() {
+  const btn = document.getElementById("tgAgree");
+  btn.disabled = true;
+  try {
+    await fetch("/api/accept-terms", { method: "POST", headers: HEADERS, body: "{}" });
+    document.getElementById("termsGate").hidden = true;
+  } catch (e) {
+    btn.disabled = false;
+    toast(L("connErr"));
+  }
+}
+function needTerms(d) {
+  if (d && d.needTerms) {
+    showTerms();
+    return true;
+  }
+  return false;
+}
+document.getElementById("tgAgree").addEventListener("click", acceptTerms);
 
 // ---------------- Ikonlar (Telegram-uslub) ----------------
 const ICON = {
@@ -192,9 +229,33 @@ function renderReel(it) {
   btn.textContent = watchLabel(it);
   btn.addEventListener("click", () => unlock(it, btn));
   ov.append(title, desc, btn);
+  if (it.canReport) {
+    const rep = document.createElement("button");
+    rep.className = "report-link";
+    rep.textContent = "⚠️ " + L("reportBtn");
+    rep.addEventListener("click", () => reportReel(it, rep));
+    ov.appendChild(rep);
+  }
 
   el.append(v, mute, actions, ov);
   return el;
+}
+
+async function reportReel(it, el) {
+  const send = async () => {
+    try {
+      const d = await (await fetch("/api/complaint", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) })).json();
+      toast(d.message || L("errGeneric"));
+      if (d.ok) {
+        it.canReport = false;
+        if (el) el.remove();
+      }
+    } catch (e) {
+      toast(L("connErr"));
+    }
+  };
+  if (tg && tg.showConfirm) tg.showConfirm(L("reportAsk"), (ok) => ok && send());
+  else if (window.confirm(L("reportAsk"))) send();
 }
 
 async function toggleLike(it, btn) {
@@ -278,6 +339,10 @@ async function buyCrypto(it, btn) {
       return;
     }
     const d = await (await fetch("/api/order", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id, address: addr }) })).json();
+    if (needTerms(d)) {
+      btn.disabled = false;
+      return;
+    }
     if (d.status === "already") {
       it.unlocked = true;
       btn.textContent = watchLabel(it);
@@ -374,6 +439,7 @@ async function load(focus) {
     LANG = data.lang;
     localize();
   }
+  if (data.acceptedTerms === false) showTerms();
   const items = (data && data.items) || [];
   if (!items.length) {
     feed.innerHTML = '<div class="empty">' + L("noContent") + "</div>";
@@ -502,7 +568,7 @@ async function renderEarning() {
     '<div class="stat-grid">' +
     '<div class="box"><div class="n">' + content.length + '</div><div class="l">' + L("videosN") + "</div></div>" +
     '<div class="box"><div class="n">' + totalSales + '</div><div class="l">' + L("sales") + "</div></div>" +
-    '<div class="box"><div class="n">$' + usd(b.available) + '</div><div class="l">' + L("available") + "</div></div>" +
+    '<div class="box"><div class="n">$' + usd(Math.max(0, b.available)) + '</div><div class="l">' + L("available") + "</div></div>" +
     "</div>";
   fillGrid(
     list,
@@ -598,7 +664,7 @@ async function renderProfile() {
   balCard.className = "card stat";
   balCard.innerHTML =
     '<div class="card-title">' + L("available") + "</div>" +
-    '<div class="big">$' + usd(b.available) + "</div>" +
+    '<div class="big">$' + usd(Math.max(0, b.available)) + "</div>" +
     '<div class="sub">' + L("totalEarned") + ": $" + usd(b.earned) + " · creator " + d.creatorShare + "%</div>";
   const wb = document.createElement("button");
   wb.className = "primary";
@@ -665,6 +731,10 @@ async function withdraw(btn) {
   btn.textContent = L("withdrawing");
   try {
     const d = await (await fetch("/api/withdraw", { method: "POST", headers: HEADERS, body: "{}" })).json();
+    if (needTerms(d)) {
+      btn.disabled = false;
+      return;
+    }
     toast(d.message || L("errGeneric"));
     meCache = null;
     renderProfile();
@@ -712,6 +782,7 @@ async function doUpload() {
     fd.append("title", title);
     fd.append("price", price);
     const d = await (await fetch("/api/upload", { method: "POST", headers: { "X-Init-Data": initData }, body: fd })).json();
+    if (needTerms(d)) return;
     if (d.status === "published") {
       toast(L("uploadedOk"));
       document.getElementById("upReel").value = "";

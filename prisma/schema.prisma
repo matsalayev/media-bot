@@ -16,10 +16,11 @@ model User {
   username     String?
   firstName    String?
   languageCode String?
-  lang         String? // tanlangan interfeys tili: uz | ru | en
-  tonWallet    String? // creator payout uchun TON hamyon manzili (USDT shu yerga tushadi)
-  isAdmin      Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  lang          String? // tanlangan interfeys tili: uz | ru | en
+  tonWallet     String? // creator payout uchun TON hamyon manzili (USDT shu yerga tushadi)
+  acceptedTerms Boolean  @default(false) // foydalanish shartlarini qabul qilganmi
+  isAdmin       Boolean  @default(false)
+  createdAt     DateTime @default(now())
 
   unlocks Unlock[]
   views   View[]
@@ -49,11 +50,12 @@ model Content {
   shareCount      Int      @default(0)
   createdAt       DateTime @default(now())
 
-  unlocks Unlock[]
-  views   View[]
-  likes   ContentLike[]
-  saves   SavedItem[]
-  orders  Order[]
+  unlocks    Unlock[]
+  views      View[]
+  likes      ContentLike[]
+  saves      SavedItem[]
+  orders     Order[]
+  complaints Complaint[]
 }
 
 // USDT (TON Connect) to'lov buyurtmasi — on-chain to'lovni aniqlash uchun
@@ -74,6 +76,36 @@ model Order {
   @@index([status])
 }
 
+// "Aldov" shikoyati — reel to'liq videoga mos kelmasa
+model Complaint {
+  id        Int      @id @default(autoincrement())
+  contentId Int
+  userId    Int // shikoyatchi (xaridor)
+  buyerTgId String
+  reason    String?
+  status    String   @default("pending") // pending | approved | rejected
+  createdAt DateTime @default(now())
+
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@unique([userId, contentId]) // bir user bir kontentga bir marta
+}
+
+// Pul qaytarish (refund) — 90% xaridorga, 10% komissiya qoladi
+model Refund {
+  id          Int      @id @default(autoincrement())
+  contentId   Int
+  buyerTgId   String
+  toAddr      String
+  amountUsdt  Float
+  status      String   @default("processing") // processing | paid | failed
+  txHash      String?
+  complaintId Int?
+  createdAt   DateTime @default(now())
+
+  @@index([status])
+}
+
 model Unlock {
   id            Int      @id @default(autoincrement())
   userId        Int
@@ -84,7 +116,8 @@ model Unlock {
   platformFee   Int      @default(0) // (legacy) platforma komissiyasi (Stars)
   creatorEarnedUsdt Float @default(0) // creator ulushi (USDT) — balans shu bo'yicha
   platformFeeUsdt   Float @default(0) // platforma komissiyasi (USDT)
-  chargeId      String? // telegram_payment_charge_id (refund uchun)
+  refunded      Boolean  @default(false) // pul qaytarilganmi (aldov shikoyati bo'yicha)
+  chargeId      String? // on-chain tx / charge id
   createdAt     DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id])

@@ -9,7 +9,7 @@ import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
-import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet } from "./bot";
+import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet, createComplaint } from "./bot";
 import { tonEnabled, buildJettonPurchase } from "./ton";
 import { usdtToStars } from "./pricing";
 
@@ -59,10 +59,12 @@ export function buildServer() {
     const body = (req.body ?? {}) as { focus?: number };
     let userId: number | null = null;
     let lang = "uz";
+    let acceptedTerms = true; // anonim ko'rish uchun true (harakatlar baribir bloklangan)
     if (tg) {
       const u = await getUser(tg);
       userId = u.id;
       lang = normLang(u.lang);
+      acceptedTerms = u.acceptedTerms;
     }
 
     let items = await prisma.content.findMany({ where: { status: "published" }, orderBy: { id: "desc" }, take: 30 });
@@ -76,7 +78,7 @@ export function buildServer() {
     let liked = new Set<number>();
     let saved = new Set<number>();
     if (userId) {
-      unlocked = new Set((await prisma.unlock.findMany({ where: { userId }, select: { contentId: true } })).map((x) => x.contentId));
+      unlocked = new Set((await prisma.unlock.findMany({ where: { userId, refunded: false }, select: { contentId: true } })).map((x) => x.contentId));
       liked = new Set((await prisma.contentLike.findMany({ where: { userId }, select: { contentId: true } })).map((x) => x.contentId));
       saved = new Set((await prisma.savedItem.findMany({ where: { userId }, select: { contentId: true } })).map((x) => x.contentId));
     }
@@ -84,6 +86,7 @@ export function buildServer() {
     return {
       botUsername: botUsername(),
       lang,
+      acceptedTerms,
       items: await Promise.all(
         items.map(async (c) => ({
           id: c.id,
@@ -92,6 +95,7 @@ export function buildServer() {
           priceUsdt: c.priceUsdt,
           reelUrl: await reelSrc(c),
           unlocked: unlocked.has(c.id) || c.priceUsdt === 0,
+          canReport: unlocked.has(c.id) && c.priceUsdt > 0, // sotib olingan pullik kontent → shikoyat mumkin
           liked: liked.has(c.id),
           saved: saved.has(c.id),
           likeCount: c.likeCount,
@@ -117,11 +121,11 @@ export function buildServer() {
       ? await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } })
       : null;
 
-    if (content.priceUsdt === 0 || alreadyUnlocked) {
+    if (content.priceUsdt === 0 || (alreadyUnlocked && !alreadyUnlocked.refunded)) {
       await deliverContent(tg.id, contentId, content.priceUsdt === 0 ? "free" : "unlock");
       return { status: "delivered" };
     }
-    return { status: "needpay", priceUsdt: content.priceUsdt }; // pullik → kripto oqimi (/api/order)
+    return { status: "needpay", priceUsdt: content.priceUsdt }; // pullik yoki refund qilingan → kripto oqimi (/api/order)
   });
 
   // ---- USDT to'lov buyurtmasi (TON Connect) ----
@@ -140,8 +144,9 @@ export function buildServer() {
     if (!content.videoFileId) return reply.code(409).send({ error: "kontent to'liq video yo'q" }); // to'lovni oldini olamiz
 
     const user = await getUser(tg);
+    if (!user.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
     const already = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
-    if (already) return { status: "already" };
+    if (already && !already.refunded) return { status: "already" };
 
     const nonce = randomUUID();
     await prisma.order.create({ data: { nonce, contentId, buyerTgId: tg.id, amountUsdt: content.priceUsdt, status: "pending" } });
@@ -217,6 +222,17 @@ export function buildServer() {
     await prisma.content.update({ where: { id: contentId }, data: { shareCount: { increment: 1 } } }).catch(() => {});
     const u = botUsername();
     return { link: u ? `https://t.me/${u}?startapp=c${contentId}` : "" };
+  });
+
+  // ---- Aldov shikoyati (sotib olingan pullik kontent) ----
+  app.post("/api/complaint", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const body = (req.body ?? {}) as { contentId?: number; reason?: string };
+    const contentId = Number(body.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    return createComplaint(tg.id, contentId, body.reason, u?.lang ?? undefined);
   });
 
   // ---- Ko'rishni hisoblash ----
@@ -324,6 +340,14 @@ export function buildServer() {
     return { ok: true };
   });
 
+  // ---- Foydalanish shartlarini qabul qilish ----
+  app.post("/api/accept-terms", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    await prisma.user.update({ where: { telegramId: tg.id }, data: { acceptedTerms: true } }).catch(() => {});
+    return { ok: true };
+  });
+
   // ---- Interfeys tilini o'zgartirish ----
   app.post("/api/lang", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
@@ -348,6 +372,7 @@ export function buildServer() {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    if (!u?.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
     return requestPayout(tg.id, u?.lang ?? undefined);
   });
 
@@ -355,6 +380,8 @@ export function buildServer() {
   app.post("/api/upload", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const upUser = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    if (!upUser?.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
 
     const fields: Record<string, string> = {};
     const files: Record<string, { buffer: Buffer; filename: string }> = {};

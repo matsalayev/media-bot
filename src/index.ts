@@ -33,6 +33,7 @@ async function main() {
     { command: "earnings", description: "Daromad (USDT)" },
     { command: "wallet", description: "TON hamyonni ulash" },
     { command: "withdraw", description: "USDT yechish" },
+    { command: "terms", description: "Foydalanish shartlari" },
     { command: "lang", description: "Tilni o'zgartirish" },
     { command: "help", description: "Yordam" },
   ];
@@ -43,6 +44,7 @@ async function main() {
     { command: "balance", description: "Balans + komissiya + hot-wallet" },
     { command: "hotwallet", description: "Hot-wallet manzili/balansi" },
     { command: "payouts", description: "Payout tarixi" },
+    { command: "complaints", description: "Aldov shikoyatlari" },
   ];
   try {
     await bot.api.setMyCommands(userCommands);

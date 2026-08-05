@@ -1,7 +1,7 @@
 // USDT (TON Connect) to'lovlarini on-chain kuzatuvchi + payout reconciler.
 import { prisma } from "./db";
 import { tonEnabled, fetchIncomingUsdt } from "./ton";
-import { deliverCryptoUnlock, reconcilePayouts, notifyAdmins } from "./bot";
+import { deliverCryptoUnlock, reconcilePayouts, reconcileRefunds, notifyAdmins } from "./bot";
 
 const ORDER_TTL_MIN = 30; // to'lanmagan buyurtma shu vaqtdan keyin eskiradi
 const MAX_DELIVER_ATTEMPTS = 6; // yetkazishning maksimal urinishlari
@@ -80,7 +80,8 @@ export function startPaymentWatcher(intervalMs = 8000): void {
   if (timer) return;
   timer = setInterval(() => {
     checkPendingOrders().catch((e) => console.warn("watcher tick xato:", (e as Error).message));
-    reconcilePayouts().catch((e) => console.warn("reconcile tick xato:", (e as Error).message));
+    reconcilePayouts().catch((e) => console.warn("payout reconcile xato:", (e as Error).message));
+    reconcileRefunds().catch((e) => console.warn("refund reconcile xato:", (e as Error).message));
   }, intervalMs);
-  console.log("👀 To'lov watcher + payout reconciler ishga tushdi.");
+  console.log("👀 To'lov watcher + payout/refund reconciler ishga tushdi.");
 }
