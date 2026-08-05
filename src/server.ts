@@ -11,6 +11,7 @@ import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
 import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet } from "./bot";
 import { tonEnabled, buildJettonPurchase } from "./ton";
+import { usdtToStars } from "./pricing";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
 
@@ -235,7 +236,11 @@ export function buildServer() {
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const user = await getUser(tg);
     const bal = await creatorBalance(user.id);
-    const list = await prisma.content.findMany({ where: { creatorId: user.id }, orderBy: { id: "desc" }, take: 50 });
+    const list = await prisma.content.findMany({
+      where: { creatorId: user.id, status: { not: "removed" } },
+      orderBy: { id: "desc" },
+      take: 100,
+    });
     const earned = await prisma.unlock.groupBy({
       by: ["contentId"],
       _sum: { creatorEarnedUsdt: true },
@@ -243,13 +248,13 @@ export function buildServer() {
     });
     const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarnedUsdt ?? 0]));
     const savedRows = await prisma.savedItem.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, content: { status: "published" } },
       include: { content: true },
       orderBy: { id: "desc" },
       take: 50,
     });
     const likedRows = await prisma.contentLike.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, content: { status: "published" } },
       include: { content: true },
       orderBy: { id: "desc" },
       take: 50,
@@ -265,6 +270,7 @@ export function buildServer() {
       content: list.map((c) => ({
         id: c.id,
         title: c.title,
+        priceUsdt: c.priceUsdt,
         status: c.status,
         views: c.viewCount,
         unlocks: c.unlockCount,
@@ -274,6 +280,50 @@ export function buildServer() {
       saved: savedRows.map((s) => ({ id: s.content.id, title: s.content.title, priceUsdt: s.content.priceUsdt })),
       liked: likedRows.map((l) => ({ id: l.content.id, title: l.content.title, priceUsdt: l.content.priceUsdt })),
     };
+  });
+
+  // ---- Kontentni tahrirlash (faqat egasi): nom / narx ----
+  app.post("/api/content/update", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const body = (req.body ?? {}) as { contentId?: number; title?: string; priceUsdt?: number };
+    const contentId = Number(body.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    const user = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    const content = await prisma.content.findUnique({ where: { id: contentId } });
+    if (!content || !user || content.creatorId !== user.id) return reply.code(403).send({ error: "not owner" });
+    const data: { title?: string; priceUsdt?: number; priceStars?: number } = {};
+    if (typeof body.title === "string" && body.title.trim()) data.title = body.title.trim().slice(0, 120);
+    if (body.priceUsdt !== undefined) {
+      const p = Math.max(0, Number(body.priceUsdt) || 0);
+      data.priceUsdt = p;
+      data.priceStars = usdtToStars(p);
+    }
+    if (!Object.keys(data).length) return reply.code(400).send({ error: "nothing to update" });
+    const c = await prisma.content.update({ where: { id: contentId }, data });
+    return { ok: true, id: c.id, title: c.title, priceUsdt: c.priceUsdt };
+  });
+
+  // ---- Kontentni o'chirish (faqat egasi): soft-delete ----
+  app.post("/api/content/delete", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const contentId = Number((req.body as { contentId?: number })?.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    const user = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    const content = await prisma.content.findUnique({ where: { id: contentId } });
+    if (!content || !user || content.creatorId !== user.id) return reply.code(403).send({ error: "not owner" });
+    await prisma.content.update({ where: { id: contentId }, data: { status: "removed" } });
+    return { ok: true };
+  });
+
+  // ---- Interfeys tilini o'zgartirish ----
+  app.post("/api/lang", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const lang = normLang(String((req.body as { lang?: string })?.lang ?? ""));
+    await prisma.user.update({ where: { telegramId: tg.id }, data: { lang } }).catch(() => {});
+    return { ok: true, lang };
   });
 
   // ---- TON hamyon manzilini saqlash ----

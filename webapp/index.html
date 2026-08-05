@@ -9,43 +9,86 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <div id="feed"><div class="empty">…</div></div>
-    <button id="profileBtn" class="icon-btn" aria-label="Profil">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
-    </button>
+    <!-- ===== REELS ===== -->
+    <section id="tab-reels" class="tab active">
+      <div id="feed"><div class="empty">…</div></div>
+    </section>
 
-    <!-- Profil ekrani -->
-    <div id="profile" class="screen" hidden>
-      <div class="screen-head">
-        <button class="back" data-close>‹</button>
-        <h2 id="lProfile">Profil</h2>
-      </div>
-      <div class="screen-body">
-        <div class="card" id="balCard"></div>
-        <div class="card" id="walletCard"></div>
-        <button class="primary" id="openUpload">➕</button>
-        <h3 id="lMyContent">Mening kontentim</h3>
-        <div id="myContent" class="list"></div>
-        <h3 id="lLiked">Yoqtirganlar</h3>
-        <div id="likedList" class="list"></div>
-        <h3 id="lSaved">Saqlangan</h3>
-        <div id="savedList" class="list"></div>
-      </div>
-    </div>
+    <!-- ===== SAQLANGAN ===== -->
+    <section id="tab-saved" class="tab page">
+      <header class="page-head"><h2 id="lSaved">Saqlangan</h2></header>
+      <div class="page-body"><div id="savedList" class="cardlist"></div></div>
+    </section>
 
-    <!-- Yuklash ekrani -->
-    <div id="upload" class="screen" hidden>
-      <div class="screen-head">
-        <button class="back" data-close>‹</button>
-        <h2 id="lUploadTitle">Video joylash</h2>
-      </div>
-      <div class="screen-body">
+    <!-- ===== QO'SHISH ===== -->
+    <section id="tab-add" class="tab page">
+      <header class="page-head"><h2 id="lUploadTitle">Video joylash</h2></header>
+      <div class="page-body">
         <label class="field"><span id="lFReel">Qisqa REELS video</span><input type="file" id="upReel" accept="video/*" /></label>
         <label class="field"><span id="lFVideo">To'liq video</span><input type="file" id="upVideo" accept="video/*" /></label>
-        <label class="field"><span id="lFTitle">Sarlavha</span><input type="text" id="upTitle" /></label>
+        <label class="field"><span id="lFTitle">Sarlavha</span><input type="text" id="upTitle" placeholder="…" /></label>
         <label class="field"><span id="lFPrice">Narx (USDT, 0 = bepul)</span><input type="number" id="upPrice" value="0" min="0" step="0.01" /></label>
         <button class="primary" id="doUpload">Yuklash</button>
-        <div class="hint" id="lHint">Maks. 50MB.</div>
+        <div class="hint" id="lHint">Maks. 50MB. Darhol joylanadi.</div>
+      </div>
+    </section>
+
+    <!-- ===== DAROMAD ===== -->
+    <section id="tab-earning" class="tab page">
+      <header class="page-head"><h2 id="lEarning">Daromad</h2></header>
+      <div class="page-body">
+        <div class="card stat" id="earnCard"></div>
+        <h3 id="lMyContent">Mening videolarim</h3>
+        <div id="myContent" class="cardlist"></div>
+      </div>
+    </section>
+
+    <!-- ===== PROFIL ===== -->
+    <section id="tab-profile" class="tab page">
+      <header class="page-head"><h2 id="lProfile">Profil</h2></header>
+      <div class="page-body">
+        <div class="profile-top" id="profileTop"></div>
+        <div class="card" id="balCard"></div>
+        <div class="card" id="walletCard"></div>
+        <h3 id="lLiked">Yoqtirganlar</h3>
+        <div id="likedList" class="cardlist"></div>
+        <div class="lang-row" id="langRow"></div>
+      </div>
+    </section>
+
+    <!-- ===== NAVBAR ===== -->
+    <nav id="nav">
+      <button class="nav-item active" data-tab="reels">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M10 8.5v7l6-3.5-6-3.5z" class="fill"/></svg>
+        <span id="nReels">Reels</span>
+      </button>
+      <button class="nav-item" data-tab="saved">
+        <svg viewBox="0 0 24 24"><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1z"/></svg>
+        <span id="nSaved">Saqlangan</span>
+      </button>
+      <button class="nav-item nav-add" data-tab="add">
+        <span class="add-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </button>
+      <button class="nav-item" data-tab="earning">
+        <svg viewBox="0 0 24 24"><path d="M4 19V10M9.5 19V5M15 19v-6M20.5 19V8"/></svg>
+        <span id="nEarning">Daromad</span>
+      </button>
+      <button class="nav-item" data-tab="profile">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+        <span id="nProfile">Profil</span>
+      </button>
+    </nav>
+
+    <!-- ===== TAHRIR OYNASI ===== -->
+    <div id="editSheet" class="sheet" hidden>
+      <div class="sheet-body">
+        <div class="sheet-grip"></div>
+        <h3 id="lEditTitle">Videoni tahrirlash</h3>
+        <label class="field"><span id="lEName">Sarlavha</span><input type="text" id="edTitle" /></label>
+        <label class="field"><span id="lEPrice">Narx (USDT)</span><input type="number" id="edPrice" min="0" step="0.01" /></label>
+        <button class="primary" id="edSave">Saqlash</button>
+        <button class="danger" id="edDelete">O'chirish</button>
+        <button class="ghost" id="edCancel">Bekor qilish</button>
       </div>
     </div>
 
