@@ -169,6 +169,36 @@ body {
   fill: #fff;
 }
 
+/* Reset (boshiga qaytish) — o'ng yuqori burchak */
+.reset-badge {
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top));
+  right: 14px;
+  z-index: 9;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.reset-badge svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.reset-badge:active {
+  background: rgba(0, 0, 0, 0.7);
+}
+
 /* Right action rail (like / save / share) — full-width tugma tepasida */
 .reel-actions {
   position: absolute;

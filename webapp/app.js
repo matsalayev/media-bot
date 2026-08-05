@@ -166,6 +166,7 @@ function showTab(name) {
   if (name === "profile") renderProfile();
 }
 document.querySelectorAll("#nav .nav-item").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+document.getElementById("resetBtn").addEventListener("click", () => load()); // boshiga qaytish + yangilash
 
 // ---------------- Reels ----------------
 function watchLabel(it) {
@@ -389,10 +390,16 @@ function pollOrder(nonce, it, btn, tries) {
   }, 4000);
 }
 
-// ---------------- Autoplay ----------------
+// ---------------- Autoplay + cheksiz aylanish ----------------
 const seen = new Set();
-function setupAutoplay() {
-  const io = new IntersectionObserver(
+let io = null;
+let allItems = []; // sahifadagi barcha reels (aylanish uchun)
+let cycleIdx = 0; // keyingi qo'shiladigan element (aylanadi)
+let appending = false;
+
+function ensureIO() {
+  if (io) return io;
+  io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) {
         const v = e.target.querySelector("video");
@@ -411,8 +418,41 @@ function setupAutoplay() {
     },
     { threshold: [0, 0.6, 1] },
   );
-  document.querySelectorAll(".reel").forEach((r) => io.observe(r));
+  return io;
 }
+function observeReels() {
+  const o = ensureIO();
+  feed.querySelectorAll(".reel:not([data-obs])").forEach((r) => {
+    r.setAttribute("data-obs", "1");
+    o.observe(r);
+  });
+}
+// allItems'dan n ta reel qo'shadi (tugasa boshidan aylanadi — cheksiz)
+function appendBatch(n) {
+  if (!allItems.length) return;
+  const frag = document.createDocumentFragment();
+  for (let k = 0; k < n; k++) {
+    frag.appendChild(renderReel(allItems[cycleIdx % allItems.length]));
+    cycleIdx++;
+  }
+  feed.appendChild(frag);
+  observeReels();
+}
+// oxiriga yaqinlashganda yana qo'shamiz (hech qachon tugamaydi)
+feed.addEventListener(
+  "scroll",
+  () => {
+    if (currentTab !== "reels" || !allItems.length) return;
+    if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - feed.clientHeight * 1.5 && !appending) {
+      appending = true;
+      appendBatch(Math.min(Math.max(allItems.length, 4), 8));
+      setTimeout(() => {
+        appending = false;
+      }, 300);
+    }
+  },
+  { passive: true },
+);
 function pauseFeed() {
   document.querySelectorAll(".reel video").forEach((v) => v.pause());
 }
@@ -446,9 +486,10 @@ async function load(focus) {
     return;
   }
   feed.innerHTML = "";
-  for (const it of items) feed.appendChild(renderReel(it));
+  allItems = items;
+  cycleIdx = 0;
+  appendBatch(items.length); // birinchi to'plam; keyin scroll bo'yicha aylanib qo'shiladi
   feed.scrollTop = 0;
-  setupAutoplay();
 }
 
 // ---------------- /api/me (cache) ----------------

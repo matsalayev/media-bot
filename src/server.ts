@@ -67,7 +67,11 @@ export function buildServer() {
       acceptedTerms = u.acceptedTerms;
     }
 
-    let items = await prisma.content.findMany({ where: { status: "published" }, orderBy: { id: "desc" }, take: 30 });
+    let items = await prisma.content.findMany({
+      where: { status: "published" },
+      orderBy: [{ likeCount: "desc" }, { id: "desc" }], // eng ko'p yoqtirilgan birinchi
+      take: 30,
+    });
     const focusId = Number(body.focus) || 0;
     if (focusId) {
       const f = await prisma.content.findFirst({ where: { id: focusId, status: "published" } });
