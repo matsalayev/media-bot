@@ -19,6 +19,8 @@ model User {
   lang          String? // tanlangan interfeys tili: uz | ru | en
   tonWallet     String? // creator payout uchun TON hamyon manzili (USDT shu yerga tushadi)
   acceptedTerms Boolean  @default(false) // foydalanish shartlarini qabul qilganmi
+  isBanned      Boolean  @default(false) // bloklangan (yuklash/sotib olish/yechish taqiqlanadi)
+  strikes       Int      @default(0) // moderatsiya ogohlantirishlari (limitда auto-ban)
   isAdmin       Boolean  @default(false)
   createdAt     DateTime @default(now())
 
@@ -56,6 +58,7 @@ model Content {
   saves      SavedItem[]
   orders     Order[]
   complaints Complaint[]
+  reports    Report[]
 }
 
 // USDT (TON Connect) to'lov buyurtmasi — on-chain to'lovni aniqlash uchun
@@ -89,6 +92,32 @@ model Complaint {
   content Content @relation(fields: [contentId], references: [id])
 
   @@unique([userId, contentId]) // bir user bir kontentga bir marta
+}
+
+// Umumiy shikoyat (noqonuniy/nomaqbul kontent) — istalgan tomoshabin yubora oladi
+model Report {
+  id           Int      @id @default(autoincrement())
+  contentId    Int
+  reporterTgId String
+  category     String // illegal | sexual | copyright | violence | other
+  reason       String?
+  status       String   @default("open") // open | actioned | dismissed
+  createdAt    DateTime @default(now())
+
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@index([status])
+}
+
+// Moderatsiya audit jurnali (dalil/hisobot uchun)
+model ModerationLog {
+  id        Int      @id @default(autoincrement())
+  action    String // takedown | ban | unban | strike | dismiss | refund
+  contentId Int?
+  targetTgId String? // ta'sirlangan foydalanuvchi
+  adminTgId String?
+  note      String?
+  createdAt DateTime @default(now())
 }
 
 // Pul qaytarish (refund) — 90% xaridorga, 10% komissiya qoladi

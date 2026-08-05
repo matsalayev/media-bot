@@ -147,6 +147,32 @@ body {
 .report-link:active {
   color: #fff;
 }
+.action.report-flag svg {
+  width: 26px;
+  height: 26px;
+  opacity: 0.8;
+}
+.rep-cats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.rep-cat {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.rep-cat:active {
+  background: var(--surface-2);
+}
 
 .mute-badge {
   position: absolute;

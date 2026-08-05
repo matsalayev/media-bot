@@ -15,6 +15,9 @@ export const config = {
   // Creator ekonomikasi
   creatorSharePercent: Number(process.env.CREATOR_SHARE_PERCENT ?? 90), // creator ulushi % (platforma 10%)
   minWithdrawStars: Number(process.env.MIN_WITHDRAW_STARS ?? 100), // (legacy)
+  // Moderatsiya
+  uploadsPerHour: Number(process.env.UPLOADS_PER_HOUR ?? 10), // bir userга soatiga max yuklash
+  strikeBanThreshold: Number(process.env.STRIKE_BAN_THRESHOLD ?? 3), // shuncha strike'дан keyin auto-ban
   // Narxlash / payout birligi — USDT
   starUsd: Number(process.env.STAR_USD ?? 0.013), // 1 Star ≈ qancha USD (Telegram developer withdraw kursi)
   minWithdrawUsdt: Number(process.env.MIN_WITHDRAW_USDT ?? 1), // minimal yechish (USDT)

@@ -261,6 +261,7 @@ async function requestPayoutInner(
   const l = normLang(lang);
   const creator = await prisma.user.findUnique({ where: { telegramId } });
   if (!creator) return { ok: false, message: t(l, "startFirst") };
+  if (creator.isBanned) return { ok: false, message: t(l, "banned") };
   if (!tonEnabled()) return { ok: false, message: t(l, "payoutOffline") };
   if (!creator.tonWallet) return { ok: false, message: t(l, "needWallet") };
 
@@ -411,6 +412,10 @@ export async function processRefund(complaintId: number): Promise<{ ok: boolean;
     throw e;
   }
 
+  // Aldov tasdiqlandi → kontentni feed'dan olib tashlaymiz + creatorga strike (boshqalar aldanmasin)
+  await prisma.content.updateMany({ where: { id: c.contentId, status: "published" }, data: { status: "removed" } });
+  if (content?.creatorId) await strikeCreator(content.creatorId, `bait refund #${refund.id}`);
+
   try {
     const { hash, confirmed } = await sendUsdt(toAddr, refundUsdt, "r" + refund.id);
     await prisma.refund.updateMany({ where: { id: refund.id, status: "processing" }, data: { status: confirmed ? "paid" : "processing", txHash: hash } });
@@ -451,6 +456,98 @@ export async function reconcileRefunds(): Promise<void> {
       if (upd.count === 1) await notifyAdmins(`⚠️ Refund #${r.id} 30 daqiqada tasdiqlanmadi → failed. Qo'lda tekshiring.\n${fmtUsd(r.amountUsdt)} USDT → ${r.toAddr}`);
     }
   }
+}
+
+// ==================== Moderatsiya ====================
+
+async function modLog(action: string, data: { contentId?: number; targetTgId?: string; adminTgId?: string; note?: string }): Promise<void> {
+  await prisma.moderationLog.create({ data: { action, ...data } }).catch(() => {});
+}
+
+/** Yuklash mumkinmi (ban + soatlik limit). */
+export async function assertCanUpload(telegramId: string, lang?: string): Promise<{ ok: boolean; message: string }> {
+  const l = normLang(lang);
+  const u = await prisma.user.findUnique({ where: { telegramId } });
+  if (u?.isBanned) return { ok: false, message: t(l, "banned") };
+  if (u) {
+    const since = new Date(Date.now() - 3600 * 1000);
+    const recent = await prisma.content.count({ where: { creatorId: u.id, createdAt: { gt: since } } });
+    if (recent >= config.uploadsPerHour) return { ok: false, message: t(l, "uploadRateLimit") };
+  }
+  return { ok: true, message: "" };
+}
+
+/** Creatorga strike beradi; chegaraga yetsa auto-ban. */
+async function strikeCreator(creatorUserId: number, reason: string, adminTgId?: string): Promise<void> {
+  const u = await prisma.user.update({ where: { id: creatorUserId }, data: { strikes: { increment: 1 } } });
+  await modLog("strike", { targetTgId: u.telegramId, adminTgId, note: reason });
+  if (u.strikes >= config.strikeBanThreshold && !u.isBanned) {
+    await prisma.user.update({ where: { id: u.id }, data: { isBanned: true } });
+    await modLog("ban", { targetTgId: u.telegramId, adminTgId, note: `auto: ${config.strikeBanThreshold} strike` });
+    await bot.api.sendMessage(u.telegramId, t(normLang(u.lang), "banned")).catch(() => {});
+    await notifyAdmins(`⛔ Auto-ban: @${u.username ?? u.telegramId} (${u.strikes} strike)`);
+  }
+}
+
+/** Kontentni o'chiradi (soft-delete — dalil saqlanadi) + creatorga strike. */
+export async function takedownContent(contentId: number, adminTgId?: string, reportId?: number): Promise<{ ok: boolean; message: string }> {
+  const content = await prisma.content.findUnique({ where: { id: contentId } });
+  if (!content) return { ok: false, message: "Kontent topilmadi." };
+  if (content.status === "removed") return { ok: false, message: "Allaqachon o'chirilgan." };
+  await prisma.content.update({ where: { id: contentId }, data: { status: "removed" } });
+  await modLog("takedown", { contentId, adminTgId, note: reportId ? `report#${reportId}` : undefined });
+  await prisma.report.updateMany({ where: { contentId, status: "open" }, data: { status: "actioned" } });
+  if (content.creatorId) {
+    const creator = await prisma.user.findUnique({ where: { id: content.creatorId } });
+    if (creator) {
+      await bot.api.sendMessage(creator.telegramId, t(normLang(creator.lang), "contentRemoved", { title: content.title })).catch(() => {});
+      await strikeCreator(content.creatorId, `takedown #${contentId}`, adminTgId);
+    }
+  }
+  return { ok: true, message: `🚫 #${contentId} «${content.title}» o'chirildi.` };
+}
+
+export async function banUser(telegramId: string, adminTgId?: string): Promise<{ ok: boolean; message: string }> {
+  const u = await prisma.user.findUnique({ where: { telegramId } });
+  if (!u) return { ok: false, message: "Foydalanuvchi topilmadi." };
+  await prisma.user.update({ where: { id: u.id }, data: { isBanned: true } });
+  await modLog("ban", { targetTgId: telegramId, adminTgId });
+  await bot.api.sendMessage(telegramId, t(normLang(u.lang), "banned")).catch(() => {});
+  return { ok: true, message: `⛔ @${u.username ?? telegramId} bloklandi.` };
+}
+
+export async function unbanUser(telegramId: string, adminTgId?: string): Promise<{ ok: boolean; message: string }> {
+  const u = await prisma.user.findUnique({ where: { telegramId } });
+  if (!u) return { ok: false, message: "Foydalanuvchi topilmadi." };
+  await prisma.user.update({ where: { id: u.id }, data: { isBanned: false, strikes: 0 } });
+  await modLog("unban", { targetTgId: telegramId, adminTgId });
+  return { ok: true, message: `✅ @${u.username ?? telegramId} blokdan chiqarildi.` };
+}
+
+const REPORT_CATS = ["illegal", "sexual", "copyright", "violence", "other"];
+/** Umumiy shikoyat (istalgan tomoshabin) — adminlarga takedown/ban tugmalari bilan boradi. */
+export async function createReport(
+  reporterTgId: string,
+  contentId: number,
+  category: string,
+  reason: string | undefined,
+  lang?: string,
+): Promise<{ ok: boolean; message: string }> {
+  const l = normLang(lang);
+  const content = await prisma.content.findUnique({ where: { id: contentId } });
+  if (!content || content.status === "removed") return { ok: true, message: t(l, "reportSent") };
+  const cat = REPORT_CATS.includes(category) ? category : "other";
+  const r = await prisma.report.create({ data: { contentId, reporterTgId, category: cat, reason: reason?.slice(0, 300), status: "open" } });
+  const kb = new InlineKeyboard()
+    .text("🚫 O'chirish", `takedown:${contentId}:${r.id}`)
+    .text("⛔ Creatorni ban", `banc:${contentId}`)
+    .row()
+    .text("✅ Rad etish", `dismiss:${r.id}`);
+  await notifyAdmins(
+    `🚩 Shikoyat #${r.id} — ${cat.toUpperCase()}\nKontent #${contentId}: «${content.title}»\nSabab: ${reason ?? "—"}\nShikoyatchi: ${reporterTgId}`,
+    kb,
+  );
+  return { ok: true, message: t(l, "reportSent") };
 }
 
 // ==================== Buyruqlar ====================
@@ -554,6 +651,13 @@ bot.on("message:text", async (ctx, next) => {
   const price = Math.max(0, parseFloat((priceRaw ?? "0").trim().replace(",", ".")) || 0);
   const d = ctx.session.draft;
   if (!title || !d.reelFileId || !d.videoFileId) return ctx.reply(t(lang, "incomplete"));
+  const can = await assertCanUpload(String(ctx.from.id), lang);
+  if (!can.ok) {
+    ctx.session.step = undefined;
+    ctx.session.mode = undefined;
+    ctx.session.draft = {};
+    return ctx.reply(can.message);
+  }
   await ctx.reply(t(lang, "saving"));
   const content = await createContent(String(ctx.from.id), { fileId: d.reelFileId }, { fileId: d.videoFileId }, title, price);
   ctx.session.step = undefined;
@@ -720,6 +824,74 @@ bot.command("complaints", async (ctx) => {
     const kb = new InlineKeyboard().text("✅ Qaytarish", `refund_ok:${c.id}`).text("❌ Rad", `refund_no:${c.id}`);
     await ctx.reply(`🚨 Shikoyat #${c.id}\n«${c.content.title}» (#${c.contentId})\nXaridor: ${c.buyerTgId}\nSabab: ${c.reason ?? "—"}`, { reply_markup: kb });
   }
+});
+
+// ---------------- Moderatsiya (admin) ----------------
+
+bot.command("reports", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const list = await prisma.report.findMany({ where: { status: "open" }, orderBy: { id: "asc" }, take: 20, include: { content: true } });
+  if (!list.length) return ctx.reply("Ochiq shikoyat yo'q. ✅");
+  for (const r of list) {
+    const kb = new InlineKeyboard()
+      .text("🚫 O'chirish", `takedown:${r.contentId}:${r.id}`)
+      .text("⛔ Ban", `banc:${r.contentId}`)
+      .row()
+      .text("✅ Rad", `dismiss:${r.id}`);
+    await ctx.reply(`🚩 #${r.id} — ${r.category}\n«${r.content.title}» (#${r.contentId})\nSabab: ${r.reason ?? "—"}`, { reply_markup: kb });
+  }
+});
+
+bot.command("takedown", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const id = Number((ctx.match ?? "").toString().trim());
+  if (!id) return ctx.reply("Foydalanish: /takedown <contentId>");
+  const res = await takedownContent(id, String(ctx.from?.id));
+  await ctx.reply(res.message);
+});
+
+bot.command("ban", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const tgId = (ctx.match ?? "").toString().trim();
+  if (!tgId) return ctx.reply("Foydalanish: /ban <telegramId>");
+  await ctx.reply((await banUser(tgId, String(ctx.from?.id))).message);
+});
+
+bot.command("unban", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const tgId = (ctx.match ?? "").toString().trim();
+  if (!tgId) return ctx.reply("Foydalanish: /unban <telegramId>");
+  await ctx.reply((await unbanUser(tgId, String(ctx.from?.id))).message);
+});
+
+bot.callbackQuery(/^takedown:(\d+):(\d+)$/, async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
+  const res = await takedownContent(Number(ctx.match[1]), String(ctx.from?.id), Number(ctx.match[2]));
+  await ctx.answerCallbackQuery(res.message.slice(0, 190));
+  await ctx.editMessageReplyMarkup().catch(() => {});
+});
+
+bot.callbackQuery(/^banc:(\d+)$/, async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
+  const contentId = Number(ctx.match[1]);
+  const content = await prisma.content.findUnique({ where: { id: contentId } });
+  await takedownContent(contentId, String(ctx.from?.id));
+  let msg = "🚫 O'chirildi";
+  if (content?.creatorId) {
+    const creator = await prisma.user.findUnique({ where: { id: content.creatorId } });
+    if (creator) msg = (await banUser(creator.telegramId, String(ctx.from?.id))).message;
+  }
+  await ctx.answerCallbackQuery(msg.slice(0, 190));
+  await ctx.editMessageReplyMarkup().catch(() => {});
+});
+
+bot.callbackQuery(/^dismiss:(\d+)$/, async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
+  const id = Number(ctx.match[1]);
+  await prisma.report.update({ where: { id }, data: { status: "dismissed" } }).catch(() => {});
+  await modLog("dismiss", { adminTgId: String(ctx.from?.id), note: `report#${id}` });
+  await ctx.answerCallbackQuery("✅ Rad etildi");
+  await ctx.editMessageReplyMarkup().catch(() => {});
 });
 
 // Hot-wallet — to'ldirish uchun manzil va balans (admin)

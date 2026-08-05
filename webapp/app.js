@@ -35,6 +35,7 @@ const UI = {
     reportBtn: "Aldov — shikoyat qilish", reportAsk: "Bu reel to'liq videoga mos kelmadimi? Aldov shikoyati yuborilsinmi?",
     termsTitle: "Foydalanish shartlari", termsAgree: "✅ Roziman",
     termsText: "Media — kontent platformasi. Pullik kontent USDT (TON tarmog'i) orqali sotib olinadi.\n\n• To'lovlar blokcheynda amalga oshadi va qaytarilmaydi — aldov holatidan tashqari.\n• 🛡 Aldov himoyasi: qisqa reel to'liq videoga mos kelmasa, «⚠️ Shikoyat» qiling. Admin tasdiqlasa, to'lovingizning 90% qaytariladi (10% komissiya qaytmaydi).\n• Mualliflar har sotuvdan 90%, platforma 10% oladi.\n• Kontent uchun javobgarlik uni joylagan muallifda.\n• Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
+    reportTitle: "Shikoyat qilish", reportThanks: "✅ Shikoyat yuborildi", catIllegal: "🚫 Noqonuniy kontent", catSexual: "🔞 Jinsiy / voyaga yetmagan", catCopyright: "©️ Mualliflik huquqi", catViolence: "⚔️ Zo'ravonlik", catOther: "• Boshqa sabab",
   },
   ru: {
     navReels: "Media", navSaved: "Сохранённые", navEarning: "Доход", navProfile: "Профиль",
@@ -56,6 +57,7 @@ const UI = {
     reportBtn: "Обман — пожаловаться", reportAsk: "Этот reel не соответствует полному видео? Отправить жалобу на обман?",
     termsTitle: "Условия использования", termsAgree: "✅ Принимаю",
     termsText: "Media — платформа контента. Платный контент покупается за USDT (сеть TON).\n\n• Платежи проходят в блокчейне и не возвращаются — кроме случая обмана.\n• 🛡 Защита от обмана: если короткий reel не соответствует полному видео, подайте «⚠️ Жалобу». При подтверждении вернётся 90% (10% комиссии не возвращается).\n• Авторы получают 90% с продажи, платформа — 10%.\n• Ответственность за контент несёт автор.\n• Безопасность кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
+    reportTitle: "Пожаловаться", reportThanks: "✅ Жалоба отправлена", catIllegal: "🚫 Незаконный контент", catSexual: "🔞 Секс / несовершеннолетние", catCopyright: "©️ Авторские права", catViolence: "⚔️ Насилие", catOther: "• Другое",
   },
   en: {
     navReels: "Media", navSaved: "Saved", navEarning: "Earnings", navProfile: "Profile",
@@ -77,6 +79,7 @@ const UI = {
     reportBtn: "Report bait", reportAsk: "Doesn't this reel match the full video? Send a bait complaint?",
     termsTitle: "Terms of Use", termsAgree: "✅ I agree",
     termsText: "Media is a content platform. Paid content is purchased with USDT (TON network).\n\n• Payments settle on-chain and are non-refundable — except in cases of bait.\n• 🛡 Fraud protection: if a short reel doesn't match the full video, file a «⚠️ Complaint». If approved, 90% is refunded (the 10% commission is non-refundable).\n• Creators earn 90% per sale, the platform takes 10%.\n• Creators are responsible for their content.\n• The security of your wallet and keys is your own responsibility.\n\nAccept the terms to continue.",
+    reportTitle: "Report", reportThanks: "✅ Report sent", catIllegal: "🚫 Illegal content", catSexual: "🔞 Sexual / minors", catCopyright: "©️ Copyright", catViolence: "⚔️ Violence", catOther: "• Other",
   },
 };
 let LANG = "uz";
@@ -131,6 +134,8 @@ const ICON = {
   bookmark: '<svg viewBox="0 0 24 24"><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1z"/></svg>',
   // Telegram "forward" (uzatish) — o'ngga burilgan strelka
   share: '<svg viewBox="0 0 24 24"><path d="M12 7V4l8 7-8 7v-3.1c-4.6 0-7.9 1.4-10 4.6.7-6.4 4-10.2 10-11.5z"/></svg>',
+  // Bayroq — shikoyat (moderatsiya)
+  flag: '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 5h11l-2 3.4L16 12H5"/></svg>',
   // Ovoz YOQ (muted) — dinamik + xoch
   soundOff: '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>',
   // Ovoz BOR — dinamik + to'lqinlar
@@ -215,7 +220,12 @@ function renderReel(it) {
   shareBtn.innerHTML = ICON.share + '<span class="action-count">' + (it.shareCount || 0) + "</span>";
   shareBtn.addEventListener("click", () => shareReel(it, shareBtn));
 
-  actions.append(likeBtn, saveBtn, shareBtn);
+  const flagBtn = document.createElement("button");
+  flagBtn.className = "action report-flag";
+  flagBtn.innerHTML = ICON.flag;
+  flagBtn.addEventListener("click", () => openReportSheet(it.id));
+
+  actions.append(likeBtn, saveBtn, shareBtn, flagBtn);
 
   const ov = document.createElement("div");
   ov.className = "overlay";
@@ -258,6 +268,42 @@ async function reportReel(it, el) {
   if (tg && tg.showConfirm) tg.showConfirm(L("reportAsk"), (ok) => ok && send());
   else if (window.confirm(L("reportAsk"))) send();
 }
+
+// Umumiy shikoyat (moderatsiya) — toifa tanlash
+function openReportSheet(contentId) {
+  const cats = [
+    ["illegal", L("catIllegal")],
+    ["sexual", L("catSexual")],
+    ["copyright", L("catCopyright")],
+    ["violence", L("catViolence")],
+    ["other", L("catOther")],
+  ];
+  const wrap = document.getElementById("repCats");
+  wrap.innerHTML = "";
+  cats.forEach(([code, label]) => {
+    const b = document.createElement("button");
+    b.className = "rep-cat";
+    b.textContent = label;
+    b.addEventListener("click", () => submitReport(contentId, code));
+    wrap.appendChild(b);
+  });
+  document.getElementById("lReportTitle").textContent = L("reportTitle");
+  document.getElementById("repCancel").textContent = L("cancelBtn");
+  document.getElementById("reportSheet").hidden = false;
+}
+async function submitReport(contentId, category) {
+  document.getElementById("reportSheet").hidden = true;
+  try {
+    const d = await (await fetch("/api/report", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId, category }) })).json();
+    toast(d.message || L("reportThanks"));
+  } catch (e) {
+    toast(L("connErr"));
+  }
+}
+document.getElementById("repCancel").addEventListener("click", () => (document.getElementById("reportSheet").hidden = true));
+document.getElementById("reportSheet").addEventListener("click", (e) => {
+  if (e.target.id === "reportSheet") document.getElementById("reportSheet").hidden = true;
+});
 
 async function toggleLike(it, btn) {
   try {

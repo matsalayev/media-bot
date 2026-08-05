@@ -29,7 +29,7 @@ const S: Record<string, Entry> = {
     en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings (USDT)\n/wallet — link TON wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language",
   },
   adminPanel: {
-    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TON hamyonni ulash\n/withdraw — USDT'ni hamyonga yechish\n/terms — foydalanish shartlari\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — Stars balansi + komissiya + hot-wallet\n/hotwallet — hot-wallet manzili va balansi\n/payouts — payout tarixi\n/complaints — aldov shikoyatlari\n/resolvepayout — payoutni qo'lda hal qilish\n/resolverefund — refundni qo'lda hal qilish",
+    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TON hamyonni ulash\n/withdraw — USDT'ni hamyonga yechish\n/terms — foydalanish shartlari\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — Stars balansi + komissiya + hot-wallet\n/hotwallet — hot-wallet manzili va balansi\n/payouts — payout tarixi\n/complaints — aldov shikoyatlari\n/resolvepayout — payoutni qo'lda hal qilish\n/resolverefund — refundni qo'lda hal qilish\n\n🛡 Moderatsiya:\n/reports — shikoyatlar ro'yxati\n/takedown <id> — kontentni o'chirish\n/ban <tgId> — foydalanuvchini bloklash\n/unban <tgId> — blokdan chiqarish",
     ru: "🛠 Админ-панель — все команды\n\n👤 Пользователь:\n/start — начать / выбрать язык\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — доход (USDT)\n/wallet — привязать TON кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык\n/help — помощь\n/cancel — отменить процесс\n\n🔑 Админ:\n/admin — эта панель\n/add — добавить видео (админ)\n/balance — баланс Stars + комиссия + hot-wallet\n/hotwallet — адрес и баланс hot-wallet\n/payouts — история выплат\n/complaints — жалобы на обман\n/resolvepayout — выплата вручную\n/resolverefund — возврат вручную",
     en: "🛠 Admin panel — all commands\n\n👤 User:\n/start — start / choose language\n/upload — post a video\n/mycontent — my content\n/earnings — earnings (USDT)\n/wallet — link TON wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language\n/help — help\n/cancel — cancel the flow\n\n🔑 Admin:\n/admin — this panel\n/add — add a video (admin)\n/balance — Stars balance + commission + hot-wallet\n/hotwallet — hot-wallet address and balance\n/payouts — payout history\n/complaints — bait complaints\n/resolvepayout — resolve a payout manually\n/resolverefund — resolve a refund manually",
   },
@@ -186,6 +186,26 @@ const S: Record<string, Entry> = {
     uz: "⚠️ «{title}» uchun aldov shikoyati tasdiqlandi. {amount} USDT balansingizdan qaytarib olindi.",
     ru: "⚠️ Жалоба на обман по «{title}» подтверждена. {amount} USDT списано с вашего баланса.",
     en: "⚠️ A bait complaint for «{title}» was approved. {amount} USDT was clawed back from your balance.",
+  },
+  banned: {
+    uz: "⛔ Hisobingiz qoidabuzarlik uchun bloklangan. Yuklash, sotib olish va yechish mumkin emas.",
+    ru: "⛔ Ваш аккаунт заблокирован за нарушение. Загрузка, покупка и вывод недоступны.",
+    en: "⛔ Your account is banned for a violation. Upload, purchase and withdrawal are disabled.",
+  },
+  uploadRateLimit: {
+    uz: "Juda ko'p video yukladingiz. Bir soatdan so'ng urinib ko'ring.",
+    ru: "Вы загрузили слишком много видео. Попробуйте через час.",
+    en: "You've uploaded too many videos. Try again in an hour.",
+  },
+  contentRemoved: {
+    uz: "🚫 «{title}» videongiz qoidabuzarlik uchun o'chirildi.",
+    ru: "🚫 Ваше видео «{title}» удалено за нарушение правил.",
+    en: "🚫 Your video «{title}» was removed for a policy violation.",
+  },
+  reportSent: {
+    uz: "✅ Shikoyatingiz yuborildi. Admin ko'rib chiqadi. Rahmat!",
+    ru: "✅ Жалоба отправлена. Админ рассмотрит. Спасибо!",
+    en: "✅ Report sent. The admin will review it. Thank you!",
   },
 };
 

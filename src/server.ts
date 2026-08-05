@@ -9,7 +9,7 @@ import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
-import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet, createComplaint } from "./bot";
+import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet, createComplaint, createReport, assertCanUpload } from "./bot";
 import { tonEnabled, buildJettonPurchase } from "./ton";
 import { usdtToStars } from "./pricing";
 
@@ -148,6 +148,7 @@ export function buildServer() {
     if (!content.videoFileId) return reply.code(409).send({ error: "kontent to'liq video yo'q" }); // to'lovni oldini olamiz
 
     const user = await getUser(tg);
+    if (user.isBanned) return reply.code(403).send({ error: "banned", banned: true });
     if (!user.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
     const already = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
     if (already && !already.refunded) return { status: "already" };
@@ -237,6 +238,17 @@ export function buildServer() {
     if (!contentId) return reply.code(400).send({ error: "contentId required" });
     const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
     return createComplaint(tg.id, contentId, body.reason, u?.lang ?? undefined);
+  });
+
+  // ---- Umumiy shikoyat (noqonuniy/nomaqbul kontent) — istalgan tomoshabin ----
+  app.post("/api/report", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    const body = (req.body ?? {}) as { contentId?: number; category?: string; reason?: string };
+    const contentId = Number(body.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId required" });
+    const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    return createReport(tg.id, contentId, String(body.category ?? "other"), body.reason, u?.lang ?? undefined);
   });
 
   // ---- Ko'rishni hisoblash ----
@@ -386,6 +398,8 @@ export function buildServer() {
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const upUser = await prisma.user.findUnique({ where: { telegramId: tg.id } });
     if (!upUser?.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
+    const canUp = await assertCanUpload(tg.id, upUser?.lang ?? undefined);
+    if (!canUp.ok) return reply.code(403).send({ error: canUp.message });
 
     const fields: Record<string, string> = {};
     const files: Record<string, { buffer: Buffer; filename: string }> = {};

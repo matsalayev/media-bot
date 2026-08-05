@@ -45,6 +45,7 @@ async function main() {
     { command: "hotwallet", description: "Hot-wallet manzili/balansi" },
     { command: "payouts", description: "Payout tarixi" },
     { command: "complaints", description: "Aldov shikoyatlari" },
+    { command: "reports", description: "Shikoyatlar (moderatsiya)" },
   ];
   try {
     await bot.api.setMyCommands(userCommands);
