@@ -166,13 +166,34 @@ export async function buildJettonPurchase(
   };
 }
 
+// tonapi rate-limit himoyasi: so'rovlar KETMA-KET va minimal interval bilan; 429'da qayta uriniladi.
+let tonapiLock: Promise<unknown> = Promise.resolve();
+let lastTonapiAt = 0;
+async function tonapiGet(url: string): Promise<Response> {
+  const gap = config.tonapiKey ? 200 : 1100; // kalitsiz — sekinroq (429 oldini olish)
+  const headers = config.tonapiKey ? { headers: { Authorization: `Bearer ${config.tonapiKey}` } } : undefined;
+  const run = tonapiLock.then(async () => {
+    const wait = gap - (Date.now() - lastTonapiAt);
+    if (wait > 0) await sleep(wait);
+    let r = await fetch(url, headers);
+    for (let i = 0; i < 2 && r.status === 429; i++) {
+      await sleep(1500);
+      r = await fetch(url, headers);
+    }
+    lastTonapiAt = Date.now();
+    return r;
+  });
+  tonapiLock = run.catch(() => {});
+  return run;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function tonapiEvents(limit: number, beforeLt?: number): Promise<any> {
   const { wallet } = await ctx();
   const addr = wallet.address.toString();
   let url = `${config.tonapiBase}/v2/accounts/${addr}/events?limit=${limit}`;
   if (beforeLt) url += `&before_lt=${beforeLt}`;
-  const res = await fetch(url, config.tonapiKey ? { headers: { Authorization: `Bearer ${config.tonapiKey}` } } : undefined);
+  const res = await tonapiGet(url);
   if (!res.ok) throw new Error("tonapi " + res.status);
   return res.json();
 }
