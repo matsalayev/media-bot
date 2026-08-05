@@ -179,6 +179,19 @@ async function recordUnlock(
   }
 }
 
+/** Telegram videoni yetkaza olmaydigan (foydalanuvchi botni ochmagan/bloklagan) 403 xatolarini aniqlaydi. */
+function isCantDeliver(e: unknown): boolean {
+  const code = (e as { error_code?: number })?.error_code;
+  const msg = String((e as { description?: string })?.description ?? (e as Error)?.message ?? e).toLowerCase();
+  return (
+    code === 403 ||
+    msg.includes("can't initiate") ||
+    msg.includes("bot was blocked") ||
+    msg.includes("chat not found") ||
+    msg.includes("user is deactivated")
+  );
+}
+
 /** Bepul yoki allaqachon ochilgan kontentni chatga yuboradi. */
 export async function deliverContent(
   telegramId: string,
@@ -192,7 +205,12 @@ export async function deliverContent(
   const user = await prisma.user.findUnique({ where: { telegramId } });
   if (!user) return false;
   await recordUnlock(user.id, contentId, { source, starsPaid, chargeId });
-  await bot.api.sendVideo(telegramId, content.videoFileId, { caption: `🎬 ${content.title}`, supports_streaming: true });
+  try {
+    await bot.api.sendVideo(telegramId, content.videoFileId, { caption: `🎬 ${content.title}`, supports_streaming: true });
+  } catch (e) {
+    if (isCantDeliver(e)) return true; // ochildi (yozildi); user botni ochib qayta "ko'rish" bosса oladi
+    throw e;
+  }
   return true;
 }
 
@@ -210,11 +228,16 @@ export async function deliverCryptoUnlock(
   const creatorEarnedUsdt = (amountUsdt * config.creatorSharePercent) / 100;
   const platformFeeUsdt = amountUsdt - creatorEarnedUsdt;
   await recordUnlock(user.id, contentId, { source: "usdt", creatorEarnedUsdt, platformFeeUsdt, chargeId: txHash });
-  await bot.api.sendVideo(buyerTelegramId, content.videoFileId, {
-    caption: `🎬 ${content.title}`,
-    supports_streaming: true,
-    reply_markup: new InlineKeyboard().text(t(normLang(user.lang), "complaintBtn"), `complain:${contentId}`), // aldov shikoyati
-  });
+  try {
+    await bot.api.sendVideo(buyerTelegramId, content.videoFileId, {
+      caption: `🎬 ${content.title}`,
+      supports_streaming: true,
+      reply_markup: new InlineKeyboard().text(t(normLang(user.lang), "complaintBtn"), `complain:${contentId}`), // aldov shikoyati
+    });
+  } catch (e) {
+    if (isCantDeliver(e)) return true; // unlock yozildi; user botni ochib /start bosса ilovada "ko'rish"dan oladi
+    throw e;
+  }
   return true;
 }
 

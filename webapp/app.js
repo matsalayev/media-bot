@@ -21,6 +21,7 @@ const UI = {
     uploadTitle: "Video joylash", fReel: "Qisqa REELS video", fVideo: "To'liq video", fTitle: "Sarlavha",
     fPrice: "Narx (USDT, 0 = bepul)", uploadHint: "Maks. 50MB. Darhol joylanadi.", uploadBtn: "Yuklash",
     watchFull: "To'liq ko'rish", unlock: "Ochish", sentToChat: "✅ Video chatingizga yuborildi",
+    sentToChatHint: "✅ To'landi! Video chatga yuborildi. Kelmasa — botni oching va /start bosing.",
     paymentFailed: "To'lov amalga oshmadi", connErr: "Ulanishda xatolik", savedToast: "Saqlandi", removedToast: "Olib tashlandi",
     noContent: "Hozircha video yo'q.\n➕ orqali birinchi bo'lib qo'shing!", totalEarned: "Jami ishlangan", available: "Mavjud balans",
     withdrawBtn: "Yechish", minWithdraw: "Yechish uchun min.", myContentEmpty: "Hali video yo'q. ➕ bilan qo'shing.",
@@ -43,6 +44,7 @@ const UI = {
     uploadTitle: "Загрузить видео", fReel: "Короткое REELS видео", fVideo: "Полное видео", fTitle: "Название",
     fPrice: "Цена (USDT, 0 = бесплатно)", uploadHint: "Макс. 50MB. Публикуется сразу.", uploadBtn: "Загрузить",
     watchFull: "Смотреть", unlock: "Открыть", sentToChat: "✅ Видео отправлено в чат",
+    sentToChatHint: "✅ Оплачено! Видео отправлено в чат. Если не пришло — откройте бота и нажмите /start.",
     paymentFailed: "Оплата не прошла", connErr: "Ошибка соединения", savedToast: "Сохранено", removedToast: "Удалено",
     noContent: "Пока нет видео.\nДобавьте первым через ➕!", totalEarned: "Всего заработано", available: "Доступно",
     withdrawBtn: "Вывести", minWithdraw: "Мин. для вывода", myContentEmpty: "Пока нет видео. Добавьте через ➕.",
@@ -65,6 +67,7 @@ const UI = {
     uploadTitle: "Upload video", fReel: "Short REELS video", fVideo: "Full video", fTitle: "Title",
     fPrice: "Price (USDT, 0 = free)", uploadHint: "Max 50MB. Published instantly.", uploadBtn: "Upload",
     watchFull: "Watch", unlock: "Unlock", sentToChat: "✅ Video sent to your chat",
+    sentToChatHint: "✅ Paid! The video was sent to your chat. If it didn't arrive, open the bot and press /start.",
     paymentFailed: "Payment failed", connErr: "Connection error", savedToast: "Saved", removedToast: "Removed",
     noContent: "No videos yet.\nBe the first via ➕!", totalEarned: "Total earned", available: "Available",
     withdrawBtn: "Withdraw", minWithdraw: "Min to withdraw", myContentEmpty: "No videos yet. Add via ➕.",
@@ -413,7 +416,8 @@ async function buyCrypto(it, btn) {
 }
 function pollOrder(nonce, it, btn, tries) {
   if (tries > 45) {
-    btn.disabled = false;
+    btn.textContent = "⏳"; // to'landi, lekin tasdiq sekin — "sotib olish" ko'rinmasin
+    toast(L("sentToChatHint"));
     return;
   }
   setTimeout(async () => {
@@ -423,7 +427,7 @@ function pollOrder(nonce, it, btn, tries) {
         it.unlocked = true;
         btn.textContent = watchLabel(it);
         btn.disabled = false;
-        toast(L("sentToChat"));
+        toast(L("sentToChatHint"));
         return;
       }
       if (d.status === "expired") {
@@ -483,6 +487,29 @@ function appendBatch(n) {
   }
   feed.appendChild(frag);
   observeReels();
+  trimTop();
+}
+// Ko'rinishdan ancha yuqoridagi reels'ni DOM'dan olib tashlaymiz (video dekoderlarini bo'shatib, crashning oldini olamiz).
+// Har reel aynan viewport balandligida — shuning uchun scrollTop'ni aniq to'g'irlaymiz (sakramaydi).
+function trimTop() {
+  const reels = feed.querySelectorAll(".reel");
+  if (reels.length <= 12) return;
+  const h = feed.clientHeight || window.innerHeight;
+  const curIdx = Math.round(feed.scrollTop / h);
+  const removable = curIdx - 5;
+  if (removable <= 0) return;
+  for (let i = 0; i < removable; i++) {
+    const v = reels[i].querySelector("video");
+    if (v) {
+      try {
+        v.pause();
+        v.removeAttribute("src");
+        v.load();
+      } catch (e) {}
+    }
+    reels[i].remove();
+  }
+  feed.scrollTop -= removable * h;
 }
 // oxiriga yaqinlashganda yana qo'shamiz (hech qachon tugamaydi)
 feed.addEventListener(

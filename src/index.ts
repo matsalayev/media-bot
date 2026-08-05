@@ -1,10 +1,26 @@
 import { config } from "./config";
-import { bot } from "./bot";
+import { prisma } from "./db";
+import { bot, notifyAdmins } from "./bot";
 import { buildServer } from "./server";
 import { startPaymentWatcher } from "./watcher";
 
+// Bitta ham stray promise butun jarayonni o'ldirmasin; adminni ogohlantiramiz
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandledRejection:", reason);
+  notifyAdmins("⚠️ unhandledRejection: " + String((reason as Error)?.stack ?? reason).slice(0, 400)).catch(() => {});
+});
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err);
+  notifyAdmins("🔥 uncaughtException: " + String(err?.stack ?? err).slice(0, 400)).catch(() => {});
+  setTimeout(() => process.exit(1), 1500); // alert ketsin, keyin systemd qayta tiklaydi
+});
+
 async function main() {
-  // 0) Bot ma'lumotini oldindan yuklash (share-link'lar uchun botInfo.username kerak)
+  // 0) SQLite WAL + busy_timeout — parallel yozuvlar (feed/watcher) SQLITE_BUSY bermasin
+  await prisma.$executeRawUnsafe("PRAGMA journal_mode=WAL;").catch(() => {});
+  await prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;").catch(() => {});
+
+  // 1) Bot ma'lumotini oldindan yuklash (share-link'lar uchun botInfo.username kerak)
   await bot.init();
 
   // 1) Mini App + API serverini ishga tushirish

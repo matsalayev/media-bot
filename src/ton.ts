@@ -36,6 +36,20 @@ export function parseTonAddress(a: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// toncenter (TonClient) chaqiruvlari uchun qayta urinish — anonim/limit 429'larга chidamli
+async function tcRetry<T>(fn: () => Promise<T>, tries = 4, gap = 800): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      await sleep(gap);
+    }
+  }
+  throw last;
+}
+
 /**
  * Creator manziliga USDT (jetton) yuboradi. Barcha yuborishlar NAVBAT bilan (bitta seqno bir marta ishlatiladi).
  * confirmed — CHIQUVCHI USDT transfer on-chain topildimi (haqiqiy yetkazish isboti), shunchaki seqno emas.
@@ -56,7 +70,7 @@ async function sendUsdtInner(to: string, amountUsdt: number, comment?: string): 
   const jettonUnits = BigInt(Math.round(amountUsdt * 10 ** USDT_DECIMALS));
   if (jettonUnits <= 0n) throw new Error("summa 0");
   const master = client.open(JettonMaster.create(Address.parse(config.usdtJettonMaster)));
-  const myJettonWallet = await master.getWalletAddress(wallet.address);
+  const myJettonWallet = await tcRetry(() => master.getWalletAddress(wallet.address));
   // comment — bu payout uchun noyob belgi (on-chain aynan shu payoutni topish uchun)
   let bb = beginCell()
     .storeUint(JETTON_TRANSFER_OP, 32)
@@ -71,12 +85,17 @@ async function sendUsdtInner(to: string, amountUsdt: number, comment?: string): 
     : bb.storeBit(false);
   const body = bb.endCell();
   const opened = client.open(wallet);
-  let seqno = 0;
+  // Wallet deploy bo'lganmi? Deployed bo'lsa seqno majburiy — 0 yuborsak tarmoq rad etadi (jimgina yo'qoladi).
+  let deployed = false;
   try {
-    seqno = await opened.getSeqno();
+    const st = await tcRetry(() => client.getContractState(wallet.address), 3, 700);
+    deployed = st.state === "active";
   } catch {
-    seqno = 0; // deploy bo'lmagan bo'lsa — birinchi tx deploy qiladi
+    deployed = false;
   }
+  // Deployed bo'lsa seqno olishни talab qilamiz (fail bo'lsa throw — BROADCAST'dan oldin, xavfsiz).
+  // Deploy bo'lmagan bo'lsa seqno=0 (birinchi tx uni deploy qiladi).
+  const seqno: number = deployed ? await tcRetry<number>(() => opened.getSeqno(), 4, 800) : 0;
   const transfer = opened.createTransfer({
     seqno,
     secretKey,
@@ -294,15 +313,15 @@ export async function getHotWalletInfo(): Promise<{ address: string; ton: number
   const { client, wallet } = await ctx();
   let ton = 0;
   try {
-    ton = Number(await client.getBalance(wallet.address)) / 1e9;
+    ton = Number(await tcRetry(() => client.getBalance(wallet.address), 3, 700)) / 1e9;
   } catch {
     ton = 0;
   }
   let usdt = 0;
   try {
     const master = client.open(JettonMaster.create(Address.parse(config.usdtJettonMaster)));
-    const jw = await master.getWalletAddress(wallet.address);
-    const res = await client.runMethod(jw, "get_wallet_data");
+    const jw = await tcRetry(() => master.getWalletAddress(wallet.address), 3, 700);
+    const res = await tcRetry(() => client.runMethod(jw, "get_wallet_data"), 3, 700);
     usdt = Number(res.stack.readBigNumber()) / 10 ** USDT_DECIMALS;
   } catch {
     usdt = 0; // jetton wallet hali deploy bo'lmagan bo'lishi mumkin

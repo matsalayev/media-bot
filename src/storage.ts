@@ -31,6 +31,11 @@ export async function putReelToS3(buffer: Buffer, key: string, contentType = "vi
   );
 }
 
+/** Ixtiyoriy obyektni S3'ga yuklaydi (masalan DB backup). */
+export async function putObjectToS3(key: string, buffer: Buffer, contentType = "application/octet-stream"): Promise<void> {
+  await client().send(new PutObjectCommand({ Bucket: config.awsBucket, Key: key, Body: buffer, ContentType: contentType }));
+}
+
 /** CloudFront/public domen orqali to'g'ridan-to'g'ri URL (AWS_PUBLIC_BASE_URL bo'lsa). */
 export function publicUrlFor(key: string): string {
   const base = config.awsPublicBaseUrl || `https://${config.awsBucket}.s3.${config.awsRegion}.amazonaws.com`;

@@ -18,9 +18,9 @@ const S: Record<string, Entry> = {
     en: "✅ Language set.",
   },
   welcome: {
-    uz: "🎬 Media'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini Stars evaziga to'liq oching — video shu chatga yuboriladi.\n\n💡 O'z videongizni joylab pul ishlang: /upload",
-    ru: "🎬 Добро пожаловать в Media!\n\nСмотрите короткие видео, понравившееся откройте полностью за Stars — видео придёт в этот чат.\n\n💡 Публикуйте свои видео и зарабатывайте: /upload",
-    en: "🎬 Welcome to Media!\n\nWatch short videos, unlock the full one with Stars — it's sent to this chat.\n\n💡 Post your own videos and earn: /upload",
+    uz: "🎬 Media'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini USDT (TON) evaziga oching — to'liq video shu chatga keladi.\n\n💡 O'z videongizni joylab, har sotuvdan 90% ishlang: /upload",
+    ru: "🎬 Добро пожаловать в Media!\n\nСмотрите короткие видео, понравившееся открывайте за USDT (TON) — полное видео придёт в этот чат.\n\n💡 Публикуйте свои видео и зарабатывайте 90% с продажи: /upload",
+    en: "🎬 Welcome to Media!\n\nWatch short videos, unlock the ones you like with USDT (TON) — the full video is sent to this chat.\n\n💡 Post your own videos and earn 90% per sale: /upload",
   },
   openApp: { uz: "🎬 Ochish", ru: "🎬 Открыть", en: "🎬 Open" },
   help: {
