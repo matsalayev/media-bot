@@ -16,7 +16,7 @@ let tcui = null;
 // ---------------- i18n ----------------
 const UI = {
   uz: {
-    navReels: "Reels", navSaved: "Saqlangan", navEarning: "Daromad", navProfile: "Profil",
+    navReels: "Media", navSaved: "Saqlangan", navEarning: "Daromad", navProfile: "Profil",
     profile: "Profil", myContent: "Mening videolarim", liked: "Yoqtirganlar", saved: "Saqlangan", earning: "Daromad",
     uploadTitle: "Video joylash", fReel: "Qisqa REELS video", fVideo: "To'liq video", fTitle: "Sarlavha",
     fPrice: "Narx (USDT, 0 = bepul)", uploadHint: "Maks. 50MB. Darhol joylanadi.", uploadBtn: "Yuklash",
@@ -34,7 +34,7 @@ const UI = {
     views: "ko'rish", sales: "sotildi", videosN: "video", earnedShort: "ishlangan", price: "Narx",
   },
   ru: {
-    navReels: "Reels", navSaved: "Сохранённые", navEarning: "Доход", navProfile: "Профиль",
+    navReels: "Media", navSaved: "Сохранённые", navEarning: "Доход", navProfile: "Профиль",
     profile: "Профиль", myContent: "Мои видео", liked: "Понравившиеся", saved: "Сохранённые", earning: "Доход",
     uploadTitle: "Загрузить видео", fReel: "Короткое REELS видео", fVideo: "Полное видео", fTitle: "Название",
     fPrice: "Цена (USDT, 0 = бесплатно)", uploadHint: "Макс. 50MB. Публикуется сразу.", uploadBtn: "Загрузить",
@@ -52,7 +52,7 @@ const UI = {
     views: "просм.", sales: "продано", videosN: "видео", earnedShort: "заработано", price: "Цена",
   },
   en: {
-    navReels: "Reels", navSaved: "Saved", navEarning: "Earnings", navProfile: "Profile",
+    navReels: "Media", navSaved: "Saved", navEarning: "Earnings", navProfile: "Profile",
     profile: "Profile", myContent: "My videos", liked: "Liked", saved: "Saved", earning: "Earnings",
     uploadTitle: "Upload video", fReel: "Short REELS video", fVideo: "Full video", fTitle: "Title",
     fPrice: "Price (USDT, 0 = free)", uploadHint: "Max 50MB. Published instantly.", uploadBtn: "Upload",
@@ -416,6 +416,49 @@ function fillList(container, rows, emptyKey) {
   }
   rows.forEach((r) => container.appendChild(r));
 }
+function gridCard(it, opts) {
+  opts = opts || {};
+  const card = document.createElement("div");
+  card.className = "gcard";
+  if (it.reelUrl) {
+    const v = document.createElement("video");
+    v.className = "gthumb";
+    v.src = it.reelUrl + "#t=0.1";
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = "metadata";
+    v.setAttribute("webkit-playsinline", "");
+    card.appendChild(v);
+  } else {
+    const d = document.createElement("div");
+    d.className = "gthumb";
+    card.appendChild(d);
+  }
+  const price = document.createElement("div");
+  price.className = "gprice" + (it.priceUsdt > 0 ? " paid" : "");
+  price.textContent = it.priceUsdt > 0 ? "$" + usd(it.priceUsdt) : L("free");
+  card.appendChild(price);
+  if (opts.editable) {
+    const e = document.createElement("div");
+    e.className = "gedit";
+    e.textContent = "✏️";
+    card.appendChild(e);
+  }
+  const meta = document.createElement("div");
+  meta.className = "gmeta";
+  meta.innerHTML = '<div class="gtitle">' + escapeHtml(it.title) + "</div>" + (opts.statsHtml ? '<div class="gstats">' + opts.statsHtml + "</div>" : "");
+  card.appendChild(meta);
+  if (opts.onClick) card.addEventListener("click", opts.onClick);
+  return card;
+}
+function fillGrid(container, cards, emptyKey) {
+  container.innerHTML = "";
+  if (!cards.length) {
+    container.innerHTML = '<div class="list-empty" style="grid-column:1/-1">' + L(emptyKey) + "</div>";
+    return;
+  }
+  cards.forEach((c) => container.appendChild(c));
+}
 function openFromList(id) {
   showTab("reels");
   load(id);
@@ -431,9 +474,9 @@ async function renderSaved() {
   } catch (e) {
     return void (el.innerHTML = '<div class="list-empty">' + L("connErr") + "</div>");
   }
-  fillList(
+  fillGrid(
     el,
-    (d.saved || []).map((it) => rowEl({ title: it.title, priceUsdt: it.priceUsdt, showChevron: true, onClick: () => openFromList(it.id) })),
+    (d.saved || []).map((it) => gridCard(it, { onClick: () => openFromList(it.id) })),
     "savedEmpty",
   );
 }
@@ -461,14 +504,12 @@ async function renderEarning() {
     '<div class="box"><div class="n">' + totalSales + '</div><div class="l">' + L("sales") + "</div></div>" +
     '<div class="box"><div class="n">$' + usd(b.available) + '</div><div class="l">' + L("available") + "</div></div>" +
     "</div>";
-  fillList(
+  fillGrid(
     list,
     content.map((c) =>
-      rowEl({
-        title: c.title,
-        statsHtml: "👁 " + c.views + " · 🔓 " + c.unlocks + " · ❤️ " + c.likes + " · 💰 $" + usd(c.earned),
-        priceUsdt: c.priceUsdt,
-        showChevron: true,
+      gridCard(c, {
+        editable: true,
+        statsHtml: "👁 " + c.views + " · 🔓 " + c.unlocks + " · 💰 $" + usd(c.earned),
         onClick: () => openEdit(c),
       }),
     ),
@@ -554,23 +595,29 @@ async function renderProfile() {
     (d.user && d.user.username ? '<div class="u">@' + escapeHtml(d.user.username) + "</div>" : "") + "</div>";
 
   const b = d.balance || { earned: 0, available: 0 };
+  balCard.className = "card stat";
   balCard.innerHTML =
-    '<div class="card-title">' + L("totalEarned") + " (" + d.creatorShare + "%)</div>" +
-    '<div class="card-row"><span>' + L("totalEarned") + "</span><b>$" + usd(b.earned) + "</b></div>" +
-    '<div class="card-row"><span>' + L("available") + "</span><b>$" + usd(b.available) + "</b></div>";
-  const can = b.available >= d.minWithdraw;
-  if (can && d.tonWallet && d.payoutEnabled) {
-    const wb = document.createElement("button");
-    wb.className = "primary";
-    wb.textContent = L("withdrawBtn") + " — $" + usd(b.available);
+    '<div class="card-title">' + L("available") + "</div>" +
+    '<div class="big">$' + usd(b.available) + "</div>" +
+    '<div class="sub">' + L("totalEarned") + ": $" + usd(b.earned) + " · creator " + d.creatorShare + "%</div>";
+  const wb = document.createElement("button");
+  wb.className = "primary";
+  wb.style.marginTop = "16px";
+  const can = b.available >= d.minWithdraw && !!d.tonWallet && !!d.payoutEnabled;
+  if (can) {
+    wb.textContent = "💸 " + L("withdrawBtn") + " — $" + usd(b.available);
     wb.addEventListener("click", () => withdraw(wb));
-    balCard.appendChild(wb);
   } else {
+    wb.textContent = "💸 " + L("withdrawBtn");
+    wb.disabled = true;
+  }
+  balCard.appendChild(wb);
+  if (!can) {
     const h = document.createElement("div");
     h.className = "hint";
     h.style.textAlign = "left";
-    h.textContent = can && !d.tonWallet ? L("walletNeeded") : L("minWithdraw") + " $" + usd(d.minWithdraw);
-    balCard.appendChild(h);
+    h.textContent = !d.tonWallet ? L("walletNeeded") : b.available < d.minWithdraw ? L("minWithdraw") + " $" + usd(d.minWithdraw) : "";
+    if (h.textContent) balCard.appendChild(h);
   }
 
   walletCard.innerHTML = '<div class="card-title">' + L("walletTitle") + "</div>";
@@ -586,9 +633,9 @@ async function renderProfile() {
   wsave.addEventListener("click", () => saveWallet(inp.value, wsave));
   walletCard.append(inp, wsave);
 
-  fillList(
+  fillGrid(
     likedList,
-    (d.liked || []).map((it) => rowEl({ title: it.title, priceUsdt: it.priceUsdt, showChevron: true, onClick: () => openFromList(it.id) })),
+    (d.liked || []).map((it) => gridCard(it, { onClick: () => openFromList(it.id) })),
     "likedEmpty",
   );
 

@@ -267,18 +267,25 @@ export function buildServer() {
       creatorShare: config.creatorSharePercent,
       tonWallet: user.tonWallet ?? "",
       payoutEnabled: tonEnabled(),
-      content: list.map((c) => ({
-        id: c.id,
-        title: c.title,
-        priceUsdt: c.priceUsdt,
-        status: c.status,
-        views: c.viewCount,
-        unlocks: c.unlockCount,
-        likes: c.likeCount,
-        earned: em.get(c.id) ?? 0,
-      })),
-      saved: savedRows.map((s) => ({ id: s.content.id, title: s.content.title, priceUsdt: s.content.priceUsdt })),
-      liked: likedRows.map((l) => ({ id: l.content.id, title: l.content.title, priceUsdt: l.content.priceUsdt })),
+      content: await Promise.all(
+        list.map(async (c) => ({
+          id: c.id,
+          title: c.title,
+          priceUsdt: c.priceUsdt,
+          reelUrl: await reelSrc(c),
+          status: c.status,
+          views: c.viewCount,
+          unlocks: c.unlockCount,
+          likes: c.likeCount,
+          earned: em.get(c.id) ?? 0,
+        })),
+      ),
+      saved: await Promise.all(
+        savedRows.map(async (s) => ({ id: s.content.id, title: s.content.title, priceUsdt: s.content.priceUsdt, reelUrl: await reelSrc(s.content) })),
+      ),
+      liked: await Promise.all(
+        likedRows.map(async (l) => ({ id: l.content.id, title: l.content.title, priceUsdt: l.content.priceUsdt, reelUrl: await reelSrc(l.content) })),
+      ),
     };
   });
 

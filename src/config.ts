@@ -13,7 +13,7 @@ export const config = {
   subPriceStars: Number(process.env.SUB_PRICE_STARS ?? 150),
   subDays: Number(process.env.SUB_DAYS ?? 30),
   // Creator ekonomikasi
-  creatorSharePercent: Number(process.env.CREATOR_SHARE_PERCENT ?? 70), // creator ulushi %
+  creatorSharePercent: Number(process.env.CREATOR_SHARE_PERCENT ?? 90), // creator ulushi % (platforma 10%)
   minWithdrawStars: Number(process.env.MIN_WITHDRAW_STARS ?? 100), // (legacy)
   // Narxlash / payout birligi — USDT
   starUsd: Number(process.env.STAR_USD ?? 0.013), // 1 Star ≈ qancha USD (Telegram developer withdraw kursi)
