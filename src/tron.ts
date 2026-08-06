@@ -166,7 +166,9 @@ export async function broadcastSigned(s: SignedTxn): Promise<void> {
 export function isDefiniteBroadcastReject(errMsg: string): boolean {
   const m = String(errMsg || "");
   if (!m.startsWith("broadcast rad etildi")) return false; // tarmoq/noma'lum xato — refund qilmaymiz
-  if (/DUP_TRANSACTION/i.test(m)) return false; // allaqachon yuborilgan bo'lishi mumkin
+  // Noaniq kodlar: DUP (allaqachon yuborilgan), OTHER_ERROR/SERVER_BUSY (pool'ga tushган
+  // bo'lishi mumkin) — refund qilmaymiz, on-chain tekshiruvga (txSucceeded) yo'naltiramiz.
+  if (/DUP_TRANSACTION|OTHER_ERROR|SERVER_BUSY/i.test(m)) return false;
   return true;
 }
 

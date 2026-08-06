@@ -101,6 +101,10 @@ export async function createTopup(userId: number, baseAmountUsdt: number) {
   for (let i = 0; i < 30; i++) {
     const offset = (Math.floor(Math.random() * 9000) + 1) / D; // 0.000001..0.009000
     const expected = round6(base + offset);
+    // Backstop: index bo'lmasa ham (connection_limit=1 yozuvlarni serializatsiya qiladi) —
+    // asosiy kafolat P2002 (partial unique index), bu esa tez old-filtr.
+    const clash = await prisma.deposit.findFirst({ where: { status: "pending", expectedAmount: expected }, select: { id: true } });
+    if (clash) continue;
     try {
       return await prisma.deposit.create({
         data: { userId, address: config.tronHotWalletAddress, expectedAmount: expected, status: "pending" },

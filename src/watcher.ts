@@ -23,6 +23,8 @@ let tickBusy = false;
 let lastPollTs = Date.now() - POLL_LOOKBACK_MS;
 let lowTrxAlerted = false;
 const alertedUnmatched = new Set<string>(); // takror admin-ogohlantirishning oldini oladi
+const alertedStuck = new Set<number>(); // txHash bor, lekin on-chain topilmayotgan payout'lar
+const STUCK_ALERT_MS = 30 * 60 * 1000; // shuncha vaqt noaniq bo'lsa admin ogohlantiriladi
 
 /** Kelgan USDT to'ldirishlarni tekshiradi (server ham chaqira oladi — tezkorlik uchun). */
 export async function checkDepositsNow(): Promise<void> {
@@ -62,8 +64,16 @@ async function reconcilePayouts(): Promise<void> {
         const refunded = await failAndRefundPayout(p.id, "on-chain muvaffaqiyatsiz (REVERT/energiya)");
         if (refunded)
           await notifyUserById(p.userId, `❌ Yechish amalga oshmadi — ${p.amountUsdt.toFixed(2)} USDT balansingizga qaytarildi.`).catch(() => {});
+      } else if (Date.now() - new Date(p.createdAt).getTime() > STUCK_ALERT_MS && !alertedStuck.has(p.id)) {
+        // ok === null uzoq vaqt — tx on-chain topilmayapti (crash/mempool tushdi). Avtomatik refund
+        // XAVFLI (agar keyin tushsa ikki marta to'lov) → admin qo'lda /resolvepayout qilsin.
+        alertedStuck.add(p.id);
+        if (alertedStuck.size > 500) alertedStuck.clear();
+        await notifyAdmins(
+          `⚠️ Yechish #${p.id} uzoq vaqt noaniq (tx topilmayapti): ${p.amountUsdt.toFixed(2)} USDT → ${p.toAddress}\ntx: ${p.txHash}\nQo'lda tekshiring: on-chain bo'lsa /resolvepayout ${p.id} paid, bo'lmasa /resolvepayout ${p.id} failed`,
+        ).catch(() => {});
       }
-      // ok === null → hali noma'lum, keyingi tsiklda
+      // ok === null (yaqinda) → hali noma'lum, keyingi tsiklda
     } else if (Date.now() - new Date(p.createdAt).getTime() > PAYOUT_NO_TX_GRACE_MS) {
       // txHash yo'q + eski → hech qachon jo'natilmagan (imzolashdan oldin uzilgan): xavfsiz qaytarish.
       // onlyIfNoTx: inline oqim shu orada txHash biriktirgan bo'lsa refund qilmaymiz (ikki marta to'lov yo'q).
