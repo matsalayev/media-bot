@@ -129,6 +129,7 @@ model Refund {
   amountUsdt  Float
   status      String   @default("processing") // processing | paid | failed
   txHash      String?
+  cmOrderId   String? // Cryptomus payout order_id (resend uchun yangilanadi)
   complaintId Int?
   createdAt   DateTime @default(now())
 

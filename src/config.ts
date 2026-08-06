@@ -27,7 +27,12 @@ export const config = {
   tonApiKey: process.env.TON_API_KEY ?? "", // toncenter API key (rate-limit uchun tavsiya)
   usdtJettonMaster: process.env.USDT_JETTON_MASTER ?? "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", // TON'dagi rasmiy USD₮
   tonWalletVersion: process.env.TON_WALLET_VERSION ?? "v5r1", // v5r1 (Tonkeeper default) | v4
-  // TON Connect USDT to'lovlari (kontent sotib olish)
+  // Cryptomus to'lov protsessori (USDT-TRC20) — TON o'rniga
+  cryptomusMerchant: process.env.CRYPTOMUS_MERCHANT ?? "",
+  cryptomusPaymentKey: process.env.CRYPTOMUS_PAYMENT_KEY ?? "",
+  cryptomusPayoutKey: process.env.CRYPTOMUS_PAYOUT_KEY ?? "",
+  payoutFeeFromBalance: (process.env.PAYOUT_FEE_FROM_BALANCE ?? "1") === "1", // tarmoq haqi platforma balansidan (creator to'liq oladi)
+  // TON Connect USDT to'lovlari (eskirgan — Cryptomus'ga o'tildi)
   tonapiBase: process.env.TONAPI_BASE ?? "https://tonapi.io",
   tonapiKey: process.env.TONAPI_KEY ?? "", // ixtiyoriy (rate-limit uchun)
   purchaseGasTon: process.env.PURCHASE_GAS_TON ?? "0.1", // xaridor biriktiradigan gaz (ortiqchasi qaytadi)

@@ -10,7 +10,9 @@ import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
 import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet, createComplaint, createReport, assertCanUpload } from "./bot";
-import { tonEnabled, buildJettonPurchase } from "./ton";
+import { cryptomusEnabled, createInvoice } from "./cryptomus";
+import { reconcilePayouts, reconcileRefunds } from "./bot";
+import { settleOrderByNonce } from "./watcher";
 import { usdtToStars } from "./pricing";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
@@ -132,20 +134,18 @@ export function buildServer() {
     return { status: "needpay", priceUsdt: content.priceUsdt }; // pullik yoki refund qilingan → kripto oqimi (/api/order)
   });
 
-  // ---- USDT to'lov buyurtmasi (TON Connect) ----
+  // ---- USDT-TRC20 to'lov buyurtmasi (Cryptomus) ----
   app.post("/api/order", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    if (!tonEnabled()) return reply.code(503).send({ error: "to'lov vaqtincha ishlamayapti" });
-    const body = (req.body ?? {}) as { contentId?: number; address?: string };
-    const contentId = Number(body.contentId);
-    const address = String(body.address ?? "").trim();
-    if (!contentId || !address) return reply.code(400).send({ error: "contentId va address kerak" });
+    if (!cryptomusEnabled()) return reply.code(503).send({ error: "to'lov vaqtincha ishlamayapti" });
+    const contentId = Number((req.body as { contentId?: number })?.contentId);
+    if (!contentId) return reply.code(400).send({ error: "contentId kerak" });
 
     const content = await prisma.content.findFirst({ where: { id: contentId, status: "published" } });
     if (!content) return reply.code(404).send({ error: "not found" });
     if (content.priceUsdt <= 0) return reply.code(400).send({ error: "bepul kontent" });
-    if (!content.videoFileId) return reply.code(409).send({ error: "kontent to'liq video yo'q" }); // to'lovni oldini olamiz
+    if (!content.videoFileId) return reply.code(409).send({ error: "kontent to'liq video yo'q" });
 
     const user = await getUser(tg);
     if (user.isBanned) return reply.code(403).send({ error: "banned", banned: true });
@@ -153,18 +153,19 @@ export function buildServer() {
     const already = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
     if (already && !already.refunded) return { status: "already" };
 
-    const nonce = randomUUID();
+    const nonce = randomUUID().replace(/-/g, ""); // Cryptomus order_id
     await prisma.order.create({ data: { nonce, contentId, buyerTgId: tg.id, amountUsdt: content.priceUsdt, status: "pending" } });
+    const base = (config.publicUrl || "").replace(/\/$/, "");
     try {
-      const txData = await buildJettonPurchase(address, content.priceUsdt, nonce);
-      return { status: "ok", nonce, amountUsdt: content.priceUsdt, ...txData };
+      const inv = await createInvoice(nonce, content.priceUsdt, base + "/api/cryptomus/payment", base);
+      return { status: "ok", nonce, amountUsdt: content.priceUsdt, url: inv.url };
     } catch (e) {
       await prisma.order.updateMany({ where: { nonce }, data: { status: "expired" } });
-      return reply.code(500).send({ error: "tranzaksiya tayyorlashda xato (manzilni tekshiring)" });
+      return reply.code(500).send({ error: "to'lov sahifasini yaratib bo'lmadi" });
     }
   });
 
-  // ---- To'lov holati (buyurtma bo'yicha) ----
+  // ---- To'lov holati (buyurtma bo'yicha) — pending bo'lsa Cryptomus'dan tez tekshiradi ----
   app.post("/api/order/status", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
@@ -172,15 +173,24 @@ export function buildServer() {
     if (!nonce) return reply.code(400).send({ error: "nonce required" });
     const order = await prisma.order.findUnique({ where: { nonce } });
     if (!order || order.buyerTgId !== tg.id) return reply.code(404).send({ error: "not found" });
-    return { status: order.status };
+    if (order.status === "pending") await settleOrderByNonce(nonce).catch(() => {});
+    const fresh = await prisma.order.findUnique({ where: { nonce } });
+    return { status: fresh?.status ?? order.status };
   });
 
-  // ---- TON Connect manifest ----
-  app.get("/tonconnect-manifest.json", async () => {
-    const base = (config.webappUrl || config.publicUrl || "").replace(/\/$/, "");
-    return { url: base, name: "Media", iconUrl: base + "/icon.png" };
+  // ---- Cryptomus to'lov webhook — status Cryptomus'dan qayta so'raladi (ishonchli, imzoga bog'liq emas) ----
+  app.post("/api/cryptomus/payment", async (req, reply) => {
+    const nonce = String((req.body as { order_id?: string })?.order_id ?? "");
+    if (nonce) await settleOrderByNonce(nonce).catch(() => {});
+    return { ok: true };
   });
-  app.get("/icon.png", serveFile("icon.png", "image/png"));
+
+  // ---- Cryptomus payout/refund webhook — reconcilerni yuritamiz ----
+  app.post("/api/cryptomus/payout", async (_req, reply) => {
+    reconcilePayouts().catch(() => {});
+    reconcileRefunds().catch(() => {});
+    return { ok: true };
+  });
 
   // ---- Like (toggle) ----
   app.post("/api/like", async (req, reply) => {
@@ -298,7 +308,7 @@ export function buildServer() {
       minWithdraw: config.minWithdrawUsdt,
       creatorShare: config.creatorSharePercent,
       tonWallet: user.tonWallet ?? "",
-      payoutEnabled: tonEnabled(),
+      payoutEnabled: cryptomusEnabled(),
       content: await Promise.all(
         list.map(async (c) => ({
           id: c.id,

@@ -1,80 +1,77 @@
-// USDT (TON Connect) to'lovlarini on-chain kuzatuvchi + payout reconciler.
+// Cryptomus to'lovlarini kuzatuvchi + payout/refund reconciler.
+// Webhook birlamchi (tez), bu poll esa zaxira (webhook o'tkazib yuborilса ham yopadi).
 import { prisma } from "./db";
-import { tonEnabled, fetchIncomingUsdt } from "./ton";
+import { cryptomusEnabled, paymentStatus, isPaid } from "./cryptomus";
 import { deliverCryptoUnlock, reconcilePayouts, reconcileRefunds, notifyAdmins } from "./bot";
 
-const ORDER_TTL_MIN = 30; // to'lanmagan buyurtma shu vaqtdan keyin eskiradi
-const MAX_DELIVER_ATTEMPTS = 6; // yetkazishning maksimal urinishlari
+const ORDER_TTL_MIN = 60; // Cryptomus invoice lifetime bilan mos
+const MAX_DELIVER_ATTEMPTS = 6;
 let timer: NodeJS.Timeout | null = null;
 
-/** Kutayotgan buyurtmalarni platformaga kelgan USDT to'lovlari bilan solishtirib, kontentni yetkazadi. */
-export async function checkPendingOrders(): Promise<number> {
-  const pending = await prisma.order.findMany({ where: { status: "pending" }, orderBy: { id: "asc" }, take: 100 });
-  if (!pending.length) return 0;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OrderRow = any;
 
-  // eng eski pending buyurtma vaqti — shu vaqtgacha sahifalab yig'amiz (window'dan chiqib ketmasligi uchun)
-  const oldestMs = Math.min(...pending.map((o) => new Date(o.createdAt).getTime()));
-  const sinceUnix = Math.floor(oldestMs / 1000) - 60;
-
-  let incoming: Array<{ comment: string; usdt: number; txHash: string; from: string; ts: number }>;
+/** Bitta buyurtmani Cryptomus statusi bo'yicha hal qiladi: to'langan bo'lsa CAS + yetkazish. */
+export async function settleOrder(order: OrderRow): Promise<boolean> {
+  if (order.status !== "pending") return false;
+  let st: string;
   try {
-    incoming = await fetchIncomingUsdt(sinceUnix, 5);
+    st = await paymentStatus(order.nonce);
+  } catch {
+    return false; // Cryptomus xatosi — keyingi tsiklda
+  }
+  if (!isPaid(st)) return false;
+
+  // Atomik da'vo: faqat pending -> paid o'tkaza olsak yetkazamiz (ikki marta emas)
+  const upd = await prisma.order.updateMany({ where: { id: order.id, status: "pending" }, data: { status: "paid" } });
+  if (upd.count !== 1) return false;
+  try {
+    const ok = await deliverCryptoUnlock(order.buyerTgId, order.contentId, order.amountUsdt);
+    if (!ok) throw new Error("yetkazib bo'lmadi (video/user yo'q)");
+    return true;
   } catch (e) {
-    console.warn("watcher: tonapi xato:", (e as Error).message);
-    return 0;
+    const attempts = (order.attempts ?? 0) + 1;
+    if (attempts < MAX_DELIVER_ATTEMPTS) {
+      await prisma.order.updateMany({ where: { id: order.id, status: "paid" }, data: { status: "pending", attempts } });
+    } else {
+      await prisma.order.updateMany({ where: { id: order.id, status: "paid" }, data: { attempts } });
+      await notifyAdmins(
+        `⚠️ Buyurtma #${order.id} to'landi, lekin yetkazib bo'lmadi (${MAX_DELIVER_ATTEMPTS} urinish).\nXaridor: ${order.buyerTgId} · kontent #${order.contentId}\n${(e as Error).message}`,
+      ).catch(() => {});
+    }
+    return false;
   }
+}
 
-  // comment -> eng katta summali to'lov
-  const byComment = new Map<string, { usdt: number; txHash: string; from: string }>();
-  for (const tx of incoming) {
-    if (!tx.comment) continue;
-    const prev = byComment.get(tx.comment);
-    if (!prev || tx.usdt > prev.usdt) byComment.set(tx.comment, { usdt: tx.usdt, txHash: tx.txHash, from: tx.from });
-  }
+/** Webhook shu bilan bitta buyurtmani darhol hal qiladi. */
+export async function settleOrderByNonce(nonce: string): Promise<void> {
+  const order = await prisma.order.findUnique({ where: { nonce } });
+  if (order) await settleOrder(order);
+}
 
+/** Zaxira poll: barcha kutayotgan buyurtmalarni Cryptomus statusi bo'yicha tekshiradi. */
+export async function checkPendingOrders(): Promise<number> {
+  const pending = await prisma.order.findMany({ where: { status: "pending" }, orderBy: { id: "asc" }, take: 50 });
   let delivered = 0;
   const nowMs = Date.now();
   for (const order of pending) {
-    const match = byComment.get(order.nonce);
-    // fail-CLOSED: match yo'q yoki summa (NaN ham) yetarli emas bo'lsa — yetkazmaymiz
-    if (match && match.usdt + 1e-6 >= order.amountUsdt) {
-      // Atomik da'vo: faqat pending -> paid o'tkaza olsak yetkazamiz (ikki marta emas)
-      const upd = await prisma.order.updateMany({
-        where: { id: order.id, status: "pending" },
-        data: { status: "paid", txHash: match.txHash, fromAddr: match.from },
-      });
-      if (upd.count !== 1) continue; // boshqa tsikl allaqachon oldi
-      try {
-        const ok = await deliverCryptoUnlock(order.buyerTgId, order.contentId, order.amountUsdt, match.txHash);
-        if (!ok) throw new Error("yetkazib bo'lmadi (video yoki user yo'q)");
-        delivered++;
-      } catch (e) {
-        // yetkazishda xato — recordUnlock idempotent, shuning uchun 'pending'ga qaytarib qayta urinamiz
-        const attempts = order.attempts + 1;
-        if (attempts < MAX_DELIVER_ATTEMPTS) {
-          await prisma.order.updateMany({ where: { id: order.id, status: "paid" }, data: { status: "pending", attempts } });
-        } else {
-          await prisma.order.updateMany({ where: { id: order.id, status: "paid" }, data: { attempts } });
-          await notifyAdmins(
-            `⚠️ Buyurtma #${order.id} to'landi, lekin yetkazib bo'lmadi (${MAX_DELIVER_ATTEMPTS} urinish).\nXaridor: ${order.buyerTgId} · kontent #${order.contentId}\n${(e as Error).message}`,
-          ).catch(() => {});
-        }
-        console.error("watcher: yetkazishda xato:", (e as Error).message);
-      }
+    const ok = await settleOrder(order);
+    if (ok) {
+      delivered++;
       continue;
     }
-    // to'lanmagan + eskirgan → expired. txHash:null — bir marta ham 'paid' bo'lmagan (rollback bo'lgani expired bo'lmasin)
+    // to'lanmagan + eskirgan → expired (settleOrder allaqachon final tekshiruvni qildi)
     if (nowMs - new Date(order.createdAt).getTime() > ORDER_TTL_MIN * 60 * 1000) {
-      await prisma.order.updateMany({ where: { id: order.id, status: "pending", txHash: null }, data: { status: "expired" } });
+      await prisma.order.updateMany({ where: { id: order.id, status: "pending" }, data: { status: "expired" } });
     }
   }
   return delivered;
 }
 
-/** Davriy kuzatuv: kelgan to'lovlar + chiquvchi payoutlarni reconcile. */
-export function startPaymentWatcher(intervalMs = 8000): void {
-  if (!tonEnabled()) {
-    console.log("💤 To'lov watcher o'chiq (TON_MNEMONIC yo'q).");
+/** Davriy kuzatuv + reconcilerlar. */
+export function startPaymentWatcher(intervalMs = 10000): void {
+  if (!cryptomusEnabled()) {
+    console.log("💤 To'lov watcher o'chiq (Cryptomus sozlanmagan).");
     return;
   }
   if (timer) return;
@@ -83,5 +80,5 @@ export function startPaymentWatcher(intervalMs = 8000): void {
     reconcilePayouts().catch((e) => console.warn("payout reconcile xato:", (e as Error).message));
     reconcileRefunds().catch((e) => console.warn("refund reconcile xato:", (e as Error).message));
   }, intervalMs);
-  console.log("👀 To'lov watcher + payout/refund reconciler ishga tushdi.");
+  console.log("👀 To'lov watcher + payout/refund reconciler (Cryptomus).");
 }

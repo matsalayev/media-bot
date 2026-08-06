@@ -11,7 +11,6 @@ if (tg) {
 const initData = (tg && tg.initData) || "";
 const HEADERS = { "Content-Type": "application/json", "X-Init-Data": initData };
 const enc = encodeURIComponent;
-let tcui = null;
 
 // ---------------- i18n ----------------
 const UI = {
@@ -27,7 +26,8 @@ const UI = {
     withdrawBtn: "Yechish", minWithdraw: "Yechish uchun min.", myContentEmpty: "Hali video yo'q. ➕ bilan qo'shing.",
     likedEmpty: "Yoqtirgan yo'q.", savedEmpty: "Saqlangan yo'q.", selectFiles: "Reel va to'liq videoni tanlang",
     enterTitle: "Sarlavha kiriting", uploading: "Yuklanmoqda…", uploadedOk: "✅ Joylandi!", errGeneric: "Xatolik yuz berdi",
-    free: "bepul", walletTitle: "TON hamyon (USDT olish uchun)", walletPlaceholder: "TON manzil (UQ… yoki EQ…)",
+    free: "bepul", walletTitle: "USDT-TRC20 hamyon (yechish uchun)", walletPlaceholder: "TRC20 manzil (T… bilan boshlanadi)",
+    payOpen: "💳 To'lov sahifasi ochildi — USDT-TRC20 to'lang, video keladi", bannedMsg: "⛔ Hisobingiz bloklangan",
     walletSave: "Saqlash", walletSavedToast: "✅ Hamyon saqlandi", walletNeeded: "Avval TON hamyon manzilingizni saqlang",
     withdrawing: "Yuborilmoqda…", paymentPending: "⏳ To'lov tekshirilmoqda…", walletErr: "Hamyon ulanmadi",
     editVideo: "Videoni tahrirlash", save: "Saqlash", deleteBtn: "O'chirish", cancelBtn: "Bekor qilish",
@@ -50,7 +50,8 @@ const UI = {
     withdrawBtn: "Вывести", minWithdraw: "Мин. для вывода", myContentEmpty: "Пока нет видео. Добавьте через ➕.",
     likedEmpty: "Нет понравившихся.", savedEmpty: "Нет сохранённых.", selectFiles: "Выберите reel и полное видео",
     enterTitle: "Введите название", uploading: "Загрузка…", uploadedOk: "✅ Опубликовано!", errGeneric: "Произошла ошибка",
-    free: "бесплатно", walletTitle: "TON кошелёк (для USDT)", walletPlaceholder: "TON адрес (UQ… или EQ…)",
+    free: "бесплатно", walletTitle: "USDT-TRC20 кошелёк (для вывода)", walletPlaceholder: "TRC20 адрес (начинается с T…)",
+    payOpen: "💳 Открыта страница оплаты — оплатите USDT-TRC20, видео придёт", bannedMsg: "⛔ Ваш аккаунт заблокирован",
     walletSave: "Сохранить", walletSavedToast: "✅ Кошелёк сохранён", walletNeeded: "Сначала сохраните TON адрес",
     withdrawing: "Отправка…", paymentPending: "⏳ Проверяем оплату…", walletErr: "Кошелёк не подключён",
     editVideo: "Редактировать видео", save: "Сохранить", deleteBtn: "Удалить", cancelBtn: "Отмена",
@@ -73,7 +74,8 @@ const UI = {
     withdrawBtn: "Withdraw", minWithdraw: "Min to withdraw", myContentEmpty: "No videos yet. Add via ➕.",
     likedEmpty: "Nothing liked.", savedEmpty: "Nothing saved.", selectFiles: "Select reel and full video",
     enterTitle: "Enter a title", uploading: "Uploading…", uploadedOk: "✅ Published!", errGeneric: "Something went wrong",
-    free: "free", walletTitle: "TON wallet (to receive USDT)", walletPlaceholder: "TON address (UQ… or EQ…)",
+    free: "free", walletTitle: "USDT-TRC20 wallet (for withdrawal)", walletPlaceholder: "TRC20 address (starts with T…)",
+    payOpen: "💳 Payment page opened — pay USDT-TRC20 and the video will arrive", bannedMsg: "⛔ Your account is banned",
     walletSave: "Save", walletSavedToast: "✅ Wallet saved", walletNeeded: "Save your TON wallet address first",
     withdrawing: "Sending…", paymentPending: "⏳ Verifying payment…", walletErr: "Wallet not connected",
     editVideo: "Edit video", save: "Save", deleteBtn: "Delete", cancelBtn: "Cancel",
@@ -351,16 +353,6 @@ async function shareReel(it, btn) {
 }
 
 // ---------------- Ochish / sotib olish ----------------
-function getTC() {
-  if (tcui) return tcui;
-  if (!window.TON_CONNECT_UI) return null;
-  try {
-    tcui = new window.TON_CONNECT_UI.TonConnectUI({ manifestUrl: location.origin + "/tonconnect-manifest.json" });
-  } catch (e) {
-    return null;
-  }
-  return tcui;
-}
 async function unlock(it, btn) {
   if (it.unlocked || it.priceUsdt === 0) return deliverFree(it, btn);
   return buyCrypto(it, btn);
@@ -376,20 +368,17 @@ async function deliverFree(it, btn) {
     btn.disabled = false;
   }
 }
+// Cryptomus: to'lov sahifasini ochamiz, foydalanuvchi istalgan wallet'dan USDT-TRC20 to'laydi
 async function buyCrypto(it, btn) {
-  const tc = getTC();
-  if (!tc) return toast(L("walletErr"));
   btn.disabled = true;
   try {
-    if (!tc.connected) await tc.connectWallet();
-    const addr = tc.account && tc.account.address;
-    if (!addr) {
-      toast(L("walletErr"));
+    const d = await (await fetch("/api/order", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) })).json();
+    if (needTerms(d)) {
       btn.disabled = false;
       return;
     }
-    const d = await (await fetch("/api/order", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id, address: addr }) })).json();
-    if (needTerms(d)) {
+    if (d.banned) {
+      toast(L("bannedMsg"));
       btn.disabled = false;
       return;
     }
@@ -398,19 +387,17 @@ async function buyCrypto(it, btn) {
       btn.textContent = watchLabel(it);
       return deliverFree(it, btn);
     }
-    if (d.status !== "ok") {
+    if (d.status !== "ok" || !d.url) {
       toast(d.error || L("errGeneric"));
       btn.disabled = false;
       return;
     }
-    await tc.sendTransaction({
-      validUntil: Math.floor(Date.now() / 1000) + 600,
-      messages: [{ address: d.toJettonWallet, amount: d.amountTon, payload: d.payloadBase64 }],
-    });
-    toast(L("paymentPending"));
+    if (tg && tg.openLink) tg.openLink(d.url);
+    else window.open(d.url, "_blank");
+    toast(L("payOpen"));
     pollOrder(d.nonce, it, btn, 0);
   } catch (e) {
-    toast(L("paymentFailed"));
+    toast(L("connErr"));
     btn.disabled = false;
   }
 }
