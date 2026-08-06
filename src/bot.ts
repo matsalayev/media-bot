@@ -9,6 +9,7 @@ import {
   cryptomusEnabled,
   createPayout,
   payoutStatus,
+  payoutStatusOrNull,
   payoutIsPaid,
   payoutIsFailed,
   isTrc20Address,
@@ -315,20 +316,23 @@ async function requestPayoutInner(
     await notifyAdmins(`💸 Payout #${payout.id} (Cryptomus)\n@${creator.username ?? creator.telegramId}\n${fmtUsd(amount)} USDT → ${creator.tonWallet}`);
     return { ok: true, message: t(l, "withdrawProcessing", { amount: fmtUsd(amount) }), payoutId: payout.id, amount };
   } catch (e) {
-    // Cryptomus'da yaratilib qolgan bo'lishi mumkin — tekshiramiz (ikki marta to'lovning oldini olamiz)
-    let created = false;
+    // null = Cryptomus'da aniq YO'Q → failed (xavfsiz, balans qaytadi).
+    // string/throw (bor yoki noma'lum) → 'processing'da qoldiramiz — ikki marta to'lovning oldini olamiz.
+    let existed: string | null = null;
+    let unknown = false;
     try {
-      created = !!(await payoutStatus("p" + payout.id));
+      existed = await payoutStatusOrNull("p" + payout.id);
     } catch {
-      created = false;
+      unknown = true;
     }
-    if (created) {
-      return { ok: true, message: t(l, "withdrawProcessing", { amount: fmtUsd(amount) }), payoutId: payout.id, amount };
+    if (!unknown && existed === null) {
+      const msg = String((e as Error)?.message ?? e).slice(0, 300);
+      await prisma.payout.updateMany({ where: { id: payout.id, status: "processing" }, data: { status: "failed", note: msg } });
+      await notifyAdmins(`⚠️ Payout XATO #${payout.id}\n${fmtUsd(amount)} USDT → ${creator.tonWallet}\n${msg}`);
+      return { ok: false, message: t(l, "withdrawFailed") };
     }
-    const msg = String((e as Error)?.message ?? e).slice(0, 300);
-    await prisma.payout.updateMany({ where: { id: payout.id, status: "processing" }, data: { status: "failed", note: msg } });
-    await notifyAdmins(`⚠️ Payout XATO #${payout.id}\n${fmtUsd(amount)} USDT → ${creator.tonWallet}\n${msg}`);
-    return { ok: false, message: t(l, "withdrawFailed") };
+    await notifyAdmins(`⏳ Payout #${payout.id} holati noaniq — reconciler kuzatadi.`);
+    return { ok: true, message: t(l, "withdrawProcessing", { amount: fmtUsd(amount) }), payoutId: payout.id, amount };
   }
 }
 
@@ -341,11 +345,19 @@ async function requestPayoutInner(
 export async function reconcilePayouts(): Promise<void> {
   const list = await prisma.payout.findMany({ where: { status: "processing" }, orderBy: { id: "asc" }, take: 50 });
   for (const p of list) {
-    let st: string;
+    let st: string | null;
     try {
-      st = await payoutStatus("p" + p.id);
+      st = await payoutStatusOrNull("p" + p.id);
     } catch {
-      continue; // Cryptomus xatosi — keyingi tsiklda
+      continue; // tarmoq xatosi — keyingi tsiklda
+    }
+    if (st === null) {
+      // Cryptomus'da umuman yo'q = yaratilmagan. Uzoq vaqt (>15 daq) shunday bo'lsa failed (balans qaytadi).
+      if ((Date.now() - new Date(p.createdAt).getTime()) / 60000 > 15) {
+        const upd = await prisma.payout.updateMany({ where: { id: p.id, status: "processing" }, data: { status: "failed", note: "cryptomus: not found" } });
+        if (upd.count === 1) await notifyAdmins(`⚠️ Payout #${p.id} Cryptomus'da topilmadi → failed (balans qaytdi).\n${fmtUsd(p.amountUsdt)} USDT → ${p.toAddress}`);
+      }
+      continue;
     }
     if (payoutIsPaid(st)) {
       const upd = await prisma.payout.updateMany({ where: { id: p.id, status: "processing" }, data: { status: "paid" } });
@@ -406,8 +418,8 @@ export async function processRefund(complaintId: number): Promise<{ ok: boolean;
   if (refundUsdt <= 0) return { ok: false, message: "Qaytariladigan summa 0." };
   if (!cryptomusEnabled()) return { ok: false, message: "To'lov protsessori sozlanmagan." };
   const order = await prisma.order.findFirst({ where: { buyerTgId: c.buyerTgId, contentId: c.contentId, status: "paid" }, orderBy: { id: "desc" } });
-  // Buyer ulagan self-custody hamyonni afzal ko'ramiz; bo'lmasa to'lov kelgan manzil (birja bo'lishi mumkin — ehtiyot)
-  const toAddr = buyer.tonWallet || order?.fromAddr;
+  // Buyer ulagan TRC20 hamyonni afzal ko'ramiz; legacy fromAddr faqat u haqiqiy TRC20 bo'lsagina
+  const toAddr = buyer.tonWallet || (order?.fromAddr && isTrc20Address(order.fromAddr) ? order.fromAddr : undefined);
   if (!toAddr) return { ok: false, message: "Xaridor hamyon manzili topilmadi — qo'lda qaytaring." };
 
   // Atomik: shikoyat claim + clawback + refund yozuvi — hammasi birga (yarim holat qolmasin, ikki marta refund bo'lmasin)
@@ -434,15 +446,18 @@ export async function processRefund(complaintId: number): Promise<{ ok: boolean;
     await createPayout("r" + refund.id, refundUsdt, toAddr, payoutCallback());
     // processing — reconcileRefunds tasdiqlaydi
   } catch (e) {
-    let created = false;
+    let existed: string | null = null;
+    let unknown = false;
     try {
-      created = !!(await payoutStatus("r" + refund.id));
+      existed = await payoutStatusOrNull("r" + refund.id);
     } catch {
-      created = false;
+      unknown = true;
     }
-    if (!created) {
+    if (!unknown && existed === null) {
       await prisma.refund.updateMany({ where: { id: refund.id, status: "processing" }, data: { status: "failed" } });
-      await notifyAdmins(`⚠️ Refund #${refund.id} yuborishda xato — qo'lda tekshiring.\n${fmtUsd(refundUsdt)} USDT → ${toAddr}\n${String((e as Error)?.message ?? e).slice(0, 150)}`);
+      await notifyAdmins(`⚠️ Refund #${refund.id} yuborilmadi (Cryptomus rad etdi) — qo'lda tekshiring.\n${fmtUsd(refundUsdt)} USDT → ${toAddr}\n${String((e as Error)?.message ?? e).slice(0, 150)}`);
+    } else {
+      await notifyAdmins(`⏳ Refund #${refund.id} holati noaniq — reconciler kuzatadi (ikki marta emas).`);
     }
   }
 
@@ -464,10 +479,17 @@ export async function processRefund(complaintId: number): Promise<{ ok: boolean;
 export async function reconcileRefunds(): Promise<void> {
   const list = await prisma.refund.findMany({ where: { status: "processing" }, orderBy: { id: "asc" }, take: 50 });
   for (const r of list) {
-    let st: string;
+    let st: string | null;
     try {
-      st = await payoutStatus(r.cmOrderId ?? "r" + r.id);
+      st = await payoutStatusOrNull(r.cmOrderId ?? "r" + r.id);
     } catch {
+      continue;
+    }
+    if (st === null) {
+      if ((Date.now() - new Date(r.createdAt).getTime()) / 60000 > 15) {
+        const upd = await prisma.refund.updateMany({ where: { id: r.id, status: "processing" }, data: { status: "failed" } });
+        if (upd.count === 1) await notifyAdmins(`⚠️ Refund #${r.id} Cryptomus'da topilmadi → failed. Qo'lda tekshiring.\n${fmtUsd(r.amountUsdt)} USDT → ${r.toAddr}`);
+      }
       continue;
     }
     if (payoutIsPaid(st)) {
@@ -783,8 +805,23 @@ bot.command("resolverefund", async (ctx) => {
     await prisma.refund.update({ where: { id }, data: { status: action } });
     return ctx.reply(`Refund #${id} → ${action}`);
   }
-  // resend — YANGI Cryptomus order_id bilan (eski "r"+id band bo'lishi mumkin)
+  // resend — avval OLDINGI urinish holatini tekshiramiz (paid/processing bo'lsa qayta yubormaymiz!)
   if (r.status === "paid") return ctx.reply("Bu refund allaqachon to'langan.");
+  const prevId = r.cmOrderId ?? "r" + r.id;
+  let prev: string | null = null;
+  try {
+    prev = await payoutStatusOrNull(prevId);
+  } catch {
+    return ctx.reply("Cryptomus javob bermadi — keyinroq urinib ko'ring.");
+  }
+  if (prev !== null) {
+    if (payoutIsPaid(prev)) {
+      await prisma.refund.update({ where: { id }, data: { status: "paid" } });
+      return ctx.reply(`Refund #${id} allaqachon to'langan (Cryptomus). Qayta yuborilmadi.`);
+    }
+    if (!payoutIsFailed(prev)) return ctx.reply(`Oldingi urinish hali jarayonda (${prev}) — reconciler hal qiladi. Qayta yubormadim.`);
+  }
+  // prev === null (Cryptomus'da yo'q) yoki failed → xavfsiz qayta yuborish
   const newOrderId = "r" + r.id + "-" + Date.now().toString(36);
   await ctx.reply("⏳ Qayta yuborilmoqda…");
   try {

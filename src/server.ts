@@ -145,6 +145,7 @@ export function buildServer() {
     const content = await prisma.content.findFirst({ where: { id: contentId, status: "published" } });
     if (!content) return reply.code(404).send({ error: "not found" });
     if (content.priceUsdt <= 0) return reply.code(400).send({ error: "bepul kontent" });
+    if (content.priceUsdt < 0.01) return reply.code(400).send({ error: "narx juda kichik (min $0.01)" });
     if (!content.videoFileId) return reply.code(409).send({ error: "kontent to'liq video yo'q" });
 
     const user = await getUser(tg);
@@ -152,6 +153,11 @@ export function buildServer() {
     if (!user.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
     const already = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
     if (already && !already.refunded) return { status: "already" };
+    // Ikki marta to'lash/invoice oldini olamiz: yaqinda ochilgan buyurtma bo'lsa yangisini yaratmaymiz
+    const recentPending = await prisma.order.findFirst({
+      where: { buyerTgId: tg.id, contentId, status: "pending", createdAt: { gt: new Date(Date.now() - 90 * 1000) } },
+    });
+    if (recentPending) return reply.code(429).send({ error: "Avvalgi to'lov so'rovi hali ochiq — biroz kuting yoki uni yakunlang." });
 
     const nonce = randomUUID().replace(/-/g, ""); // Cryptomus order_id
     await prisma.order.create({ data: { nonce, contentId, buyerTgId: tg.id, amountUsdt: content.priceUsdt, status: "pending" } });

@@ -1,6 +1,7 @@
 import { config } from "./config";
 import { prisma } from "./db";
 import { bot, notifyAdmins } from "./bot";
+import { cryptomusEnabled } from "./cryptomus";
 import { buildServer } from "./server";
 import { startPaymentWatcher } from "./watcher";
 
@@ -19,6 +20,12 @@ async function main() {
   // 0) SQLite WAL + busy_timeout — parallel yozuvlar (feed/watcher) SQLITE_BUSY bermasin
   await prisma.$executeRawUnsafe("PRAGMA journal_mode=WAL;").catch(() => {});
   await prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;").catch(() => {});
+
+  // Cryptomus yoqilgan bo'lsa PUBLIC_URL to'g'ri HTTPS bo'lishi shart (webhook/invoice uchun)
+  if (cryptomusEnabled() && !/^https:\/\//.test(config.publicUrl)) {
+    console.error("⚠️ CRYPTOMUS yoqilgan, lekin PUBLIC_URL HTTPS emas:", config.publicUrl, "— to'lov webhook/invoice ishlamaydi!");
+    notifyAdmins(`⚠️ PUBLIC_URL noto'g'ri (HTTPS emas): "${config.publicUrl}" — Cryptomus to'lovlari ishlamaydi!`).catch(() => {});
+  }
 
   // 1) Bot ma'lumotini oldindan yuklash (share-link'lar uchun botInfo.username kerak)
   await bot.init();
