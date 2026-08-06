@@ -673,6 +673,110 @@ body {
   margin-bottom: 16px;
 }
 
+/* ---------- Top-up (balansni to'ldirish) ---------- */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.topup-sheet {
+  width: 100%;
+  max-width: 520px;
+  background: var(--page-bg, #0b0b0f);
+  border-radius: 22px 22px 0 0;
+  padding: 20px 18px calc(24px + var(--safe-b, 0px));
+  animation: sheetUp 0.22s ease;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.sheet-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.sheet-close {
+  width: 100%;
+  margin-top: 18px;
+  padding: 13px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.amount-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+.amount-chips .chip {
+  flex: 1 1 28%;
+  min-width: 72px;
+  padding: 16px 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+}
+.amount-chips .chip.dim {
+  opacity: 0.5;
+}
+.amount-chips .chip:active {
+  background: rgba(255, 255, 255, 0.14);
+}
+.topup-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 14px 0 6px;
+}
+.copy-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.copy-field .cf-val {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+  word-break: break-all;
+}
+.copy-field .cf-val.addr {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: monospace;
+}
+.copy-field .cf-btn {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  padding: 2px 4px;
+}
+.topup-status {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+}
+.topup-note {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 200, 90, 0.85);
+}
+
 /* ---------- Terms gate ---------- */
 .terms-gate {
   position: fixed;

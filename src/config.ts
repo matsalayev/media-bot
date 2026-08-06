@@ -20,14 +20,29 @@ export const config = {
   strikeBanThreshold: Number(process.env.STRIKE_BAN_THRESHOLD ?? 3), // shuncha strike'дан keyin auto-ban
   // Narxlash / payout birligi — USDT
   starUsd: Number(process.env.STAR_USD ?? 0.013), // 1 Star ≈ qancha USD (Telegram developer withdraw kursi)
-  minWithdrawUsdt: Number(process.env.MIN_WITHDRAW_USDT ?? 1), // minimal yechish (USDT)
+  minWithdrawUsdt: Number(process.env.MIN_WITHDRAW_USDT ?? 5), // minimal yechish (USDT)
+  withdrawFeeUsdt: Number(process.env.WITHDRAW_FEE_USDT ?? 1.5), // yechishda ushlanadigan tarmoq haqi (gazni qoplaydi)
+  disputeWindowDays: Number(process.env.DISPUTE_WINDOW_DAYS ?? 3), // daromad shuncha kun "pishadi" (aldov himoyasi); 0 = o'chiq
   // TON tarmog'ida USDT payout uchun "hot wallet"
   tonMnemonic: process.env.TON_MNEMONIC ?? "", // 24 so'zli hot-wallet seed (bo'sh bo'lsa payout o'chiq)
   tonApiEndpoint: process.env.TON_API_ENDPOINT ?? "https://toncenter.com/api/v2/jsonRPC",
   tonApiKey: process.env.TON_API_KEY ?? "", // toncenter API key (rate-limit uchun tavsiya)
   usdtJettonMaster: process.env.USDT_JETTON_MASTER ?? "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", // TON'dagi rasmiy USD₮
   tonWalletVersion: process.env.TON_WALLET_VERSION ?? "v5r1", // v5r1 (Tonkeeper default) | v4
-  // Cryptomus to'lov protsessori (USDT-TRC20) — TON o'rniga
+  // === Native TRON (USDT-TRC20) — o'zimizniki, uchinchi tomonsiz ===
+  tronFullHost: process.env.TRON_FULL_HOST ?? "https://api.trongrid.io",
+  tronApiKey: process.env.TRON_API_KEY ?? "", // TronGrid API kaliti (rate-limit uchun; tavsiya etiladi)
+  tronHotWalletAddress: process.env.TRON_HOTWALLET_ADDRESS ?? "", // qabul + to'lov manzili
+  tronHotWalletPrivkey: process.env.TRON_HOTWALLET_PRIVKEY ?? "", // faqat server .env (bo'sh bo'lsa payout o'chiq)
+  usdtTrc20Contract: process.env.USDT_TRC20_CONTRACT ?? "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", // rasmiy USDT-TRC20
+  depositTtlMin: Number(process.env.DEPOSIT_TTL_MIN ?? 120), // to'ldirish so'rovi amal qilish muddati (daqiqa)
+  payoutFeeLimitTrx: Number(process.env.PAYOUT_FEE_LIMIT_TRX ?? 100), // bitta payout uchun max energy/gaz (TRX)
+  topupAmounts: (process.env.TOPUP_AMOUNTS ?? "3,5,10,20,50") // taklif qilinadigan to'ldirish summalari (USDT)
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => n > 0),
+  lowTrxAlertTrx: Number(process.env.LOW_TRX_ALERT_TRX ?? 40), // hot-wallet TRX shundan kamaysa admin ogohlantiriladi
+  // Cryptomus (eskirgan — native TRON'ga o'tildi)
   cryptomusMerchant: process.env.CRYPTOMUS_MERCHANT ?? "",
   cryptomusPaymentKey: process.env.CRYPTOMUS_PAYMENT_KEY ?? "",
   cryptomusPayoutKey: process.env.CRYPTOMUS_PAYOUT_KEY ?? "",

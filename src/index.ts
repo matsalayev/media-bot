@@ -1,7 +1,7 @@
 import { config } from "./config";
 import { prisma } from "./db";
 import { bot, notifyAdmins } from "./bot";
-import { cryptomusEnabled } from "./cryptomus";
+import { tronEnabled, hotWalletAddress } from "./tron";
 import { buildServer } from "./server";
 import { startPaymentWatcher } from "./watcher";
 
@@ -20,11 +20,19 @@ async function main() {
   // 0) SQLite WAL + busy_timeout — parallel yozuvlar (feed/watcher) SQLITE_BUSY bermasin
   await prisma.$executeRawUnsafe("PRAGMA journal_mode=WAL;").catch(() => {});
   await prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;").catch(() => {});
+  // Ochiq (pending) to'ldirishlar summasi noyob bo'lishi shart — bir on-chain to'lov
+  // noto'g'ri userga tushmasligi uchun (partial unique index; Prisma buni ifodalay olmaydi).
+  await prisma
+    .$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "deposit_pending_amount" ON "Deposit"("expectedAmount") WHERE "status" = 'pending';`,
+    )
+    .catch((e) => console.warn("deposit_pending_amount index:", (e as Error).message));
 
-  // Cryptomus yoqilgan bo'lsa PUBLIC_URL to'g'ri HTTPS bo'lishi shart (webhook/invoice uchun)
-  if (cryptomusEnabled() && !/^https:\/\//.test(config.publicUrl)) {
-    console.error("⚠️ CRYPTOMUS yoqilgan, lekin PUBLIC_URL HTTPS emas:", config.publicUrl, "— to'lov webhook/invoice ishlamaydi!");
-    notifyAdmins(`⚠️ PUBLIC_URL noto'g'ri (HTTPS emas): "${config.publicUrl}" — Cryptomus to'lovlari ishlamaydi!`).catch(() => {});
+  // TRON to'lov holati
+  if (tronEnabled()) {
+    console.log(`💳 Native TRON to'lov yoqilgan. Hot-wallet: ${hotWalletAddress()}`);
+  } else {
+    console.log("💤 TRON hot-wallet sozlanmagan — to'lov/yechish o'chiq (.env: TRON_HOTWALLET_*).");
   }
 
   // 1) Bot ma'lumotini oldindan yuklash (share-link'lar uchun botInfo.username kerak)
@@ -54,7 +62,7 @@ async function main() {
     { command: "upload", description: "Video joylash" },
     { command: "mycontent", description: "Mening kontentim" },
     { command: "earnings", description: "Daromad (USDT)" },
-    { command: "wallet", description: "TON hamyonni ulash" },
+    { command: "wallet", description: "TRC20 hamyon ulash" },
     { command: "withdraw", description: "USDT yechish" },
     { command: "terms", description: "Foydalanish shartlari" },
     { command: "lang", description: "Tilni o'zgartirish" },

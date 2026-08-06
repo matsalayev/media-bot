@@ -1,96 +1,111 @@
-// Cryptomus to'lovlarini kuzatuvchi + payout/refund reconciler.
-// Webhook birlamchi (tez), bu poll esa zaxira (webhook o'tkazib yuborilса ham yopadi).
+// Native TRON kuzatuvchisi:
+//  1) hot-wallet'ga kelgan USDT to'ldirishlarni tanib, balansga kreditlaydi;
+//  2) muddati o'tgan to'ldirishlarni yopadi;
+//  3) "processing" payout'larni on-chain holat bo'yicha yakunlaydi (crash-recovery);
+//  4) hot-wallet TRX (gaz) kamayganда adminni ogohlantiradi.
 import { prisma } from "./db";
-import { cryptomusEnabled, paymentStatus, isPaid, isTerminalUnpaid } from "./cryptomus";
-import { deliverCryptoUnlock, reconcilePayouts, reconcileRefunds, notifyAdmins } from "./bot";
+import { config } from "./config";
+import { tronEnabled, fetchIncomingUsdt, getTrxBalance, txSucceeded } from "./tron";
+import {
+  creditIncomingDeposit,
+  expireOldDeposits,
+  markPayoutPaid,
+  failAndRefundPayout,
+} from "./ledger";
+import { notifyAdmins, notifyUserById } from "./bot";
 
-// Invoice lifetime 60 daqiqa. TTL uni ancha oshiб qo'yamiz — kech tasdiqlangan to'lov ham yetkazilsin.
-const ORDER_TTL_MIN = 180;
-const MAX_DELIVER_ATTEMPTS = 6;
+const POLL_LOOKBACK_MS = 60 * 60 * 1000; // qayta-skanlash xavfsizlik oynasi
+const OVERLAP_MS = 2 * 60 * 1000;
+const PAYOUT_NO_TX_GRACE_MS = 5 * 60 * 1000; // txHash'siz payout shundan keyin xavfsiz "failed" (inline oqim latensiyasidan ancha yuqori)
+
 let timer: NodeJS.Timeout | null = null;
+let tickBusy = false;
+let lastPollTs = Date.now() - POLL_LOOKBACK_MS;
+let lowTrxAlerted = false;
+const alertedUnmatched = new Set<string>(); // takror admin-ogohlantirishning oldini oladi
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type OrderRow = any;
-type SettleResult = "delivered" | "unpaid_terminal" | "pending";
-
-/**
- * Bitta buyurtmani Cryptomus statusi bo'yicha hal qiladi.
- *  - "delivered": to'landi va yetkazildi
- *  - "unpaid_terminal": Cryptomus'da yakuniy bekor/muvaffaqiyatsiz → expire xavfsiz
- *  - "pending": hali tasdiqlanmoqda YOKI status olib bo'lmadi (noma'lum) → EXPIRE QILMASLIK kerak
- */
-export async function settleOrder(order: OrderRow): Promise<SettleResult> {
-  if (order.status !== "pending") return "pending";
-  let st: string;
-  try {
-    st = await paymentStatus(order.nonce);
-  } catch {
-    return "pending"; // tarmoq/noma'lum — expire qilmaymiz
+/** Kelgan USDT to'ldirishlarni tekshiradi (server ham chaqira oladi — tezkorlik uchun). */
+export async function checkDepositsNow(): Promise<void> {
+  const since = lastPollTs - OVERLAP_MS;
+  const txs = await fetchIncomingUsdt(since);
+  let maxTs = lastPollTs;
+  for (const t of txs) {
+    if (t.timestamp > maxTs) maxTs = t.timestamp;
+    const r = await creditIncomingDeposit(t.txID, t.amountUsdt);
+    if (r.status === "credited") {
+      alertedUnmatched.delete(t.txID);
+      await notifyUserById(
+        r.userId,
+        `✅ Balans to'ldirildi: +${r.amountUsdt.toFixed(2)} USDT\nJoriy balans: ${r.balanceAfter.toFixed(2)} USDT`,
+      ).catch(() => {});
+    } else if (r.status === "nomatch" && !alertedUnmatched.has(t.txID)) {
+      alertedUnmatched.add(t.txID);
+      if (alertedUnmatched.size > 500) alertedUnmatched.clear();
+      await notifyAdmins(
+        `⚠️ Mos kelmagan to'lov: ${t.amountUsdt.toFixed(6)} USDT\nKimdan: ${t.from}\ntx: ${t.txID}\nKutilgan summaga mos emas — qo'lda tekshiring (/credit).`,
+      ).catch(() => {});
+    }
   }
-  if (isPaid(st)) {
-    const upd = await prisma.order.updateMany({ where: { id: order.id, status: "pending" }, data: { status: "paid" } });
-    if (upd.count !== 1) return "pending"; // boshqa tsikl oldi
-    try {
-      const ok = await deliverCryptoUnlock(order.buyerTgId, order.contentId, order.amountUsdt);
-      if (!ok) throw new Error("yetkazib bo'lmadi (video/user yo'q)");
-      return "delivered";
-    } catch (e) {
-      const attempts = (order.attempts ?? 0) + 1;
-      if (attempts < MAX_DELIVER_ATTEMPTS) {
-        await prisma.order.updateMany({ where: { id: order.id, status: "paid" }, data: { status: "pending", attempts } });
-      } else {
-        await prisma.order.updateMany({ where: { id: order.id, status: "paid" }, data: { attempts } });
-        await notifyAdmins(
-          `⚠️ Buyurtma #${order.id} to'landi, lekin yetkazib bo'lmadi (${MAX_DELIVER_ATTEMPTS} urinish).\nXaridor: ${order.buyerTgId} · kontent #${order.contentId}\n${(e as Error).message}`,
-        ).catch(() => {});
+  lastPollTs = maxTs;
+}
+
+/** "processing" payout'larni yakunlaydi. */
+async function reconcilePayouts(): Promise<void> {
+  const stuck = await prisma.payout.findMany({ where: { status: "processing" }, take: 50, orderBy: { id: "asc" } });
+  for (const p of stuck) {
+    if (p.txHash) {
+      const ok = await txSucceeded(p.txHash);
+      if (ok === true) {
+        await markPayoutPaid(p.id, p.txHash);
+        await notifyUserById(p.userId, `✅ Yechish yakunlandi: ${p.amountUsdt.toFixed(2)} USDT\ntx: ${p.txHash}`).catch(() => {});
+      } else if (ok === false) {
+        const refunded = await failAndRefundPayout(p.id, "on-chain muvaffaqiyatsiz (REVERT/energiya)");
+        if (refunded)
+          await notifyUserById(p.userId, `❌ Yechish amalga oshmadi — ${p.amountUsdt.toFixed(2)} USDT balansingizga qaytarildi.`).catch(() => {});
       }
-      return "pending"; // to'langan, lekin yetkazilmadi — expire qilmaymiz (qayta urinamiz)
+      // ok === null → hali noma'lum, keyingi tsiklda
+    } else if (Date.now() - new Date(p.createdAt).getTime() > PAYOUT_NO_TX_GRACE_MS) {
+      // txHash yo'q + eski → hech qachon jo'natilmagan (imzolashdan oldin uzilgan): xavfsiz qaytarish.
+      // onlyIfNoTx: inline oqim shu orada txHash biriktirgan bo'lsa refund qilmaymiz (ikki marta to'lov yo'q).
+      const refunded = await failAndRefundPayout(p.id, "jo'natilmadi (imzolashdan oldin uzildi)", { onlyIfNoTx: true });
+      if (refunded)
+        await notifyUserById(p.userId, `❌ Yechish boshlanmadi — ${p.amountUsdt.toFixed(2)} USDT balansingizga qaytarildi. Qayta urinib ko'ring.`).catch(() => {});
     }
   }
-  if (isTerminalUnpaid(st)) return "unpaid_terminal";
-  return "pending"; // check/process/confirm_check va h.k. — hali tugamagan
 }
 
-/** Webhook shu bilan bitta buyurtmani darhol hal qiladi. */
-export async function settleOrderByNonce(nonce: string): Promise<void> {
-  const order = await prisma.order.findUnique({ where: { nonce } });
-  if (order) await settleOrder(order);
-}
-
-/** Zaxira poll: kutayotgan buyurtmalarni tekshiradi; FAQAT yakuniy-to'lanmagan yoki juda eski bo'lsa expire. */
-export async function checkPendingOrders(): Promise<number> {
-  const pending = await prisma.order.findMany({ where: { status: "pending" }, orderBy: { id: "asc" }, take: 50 });
-  let delivered = 0;
-  const nowMs = Date.now();
-  for (const order of pending) {
-    const r = await settleOrder(order);
-    if (r === "delivered") {
-      delivered++;
-      continue;
-    }
-    if (r === "unpaid_terminal") {
-      await prisma.order.updateMany({ where: { id: order.id, status: "pending" }, data: { status: "expired" } });
-      continue;
-    }
-    // pending/noma'lum: faqat invoice muddatidan ancha o'tган (TTL) bo'lsa expire — kech tasdiq ham yetgan bo'lardi
-    if (nowMs - new Date(order.createdAt).getTime() > ORDER_TTL_MIN * 60 * 1000) {
-      await prisma.order.updateMany({ where: { id: order.id, status: "pending" }, data: { status: "expired" } });
-    }
+async function checkGas(): Promise<void> {
+  const trx = await getTrxBalance();
+  if (trx < config.lowTrxAlertTrx && !lowTrxAlerted) {
+    lowTrxAlerted = true;
+    await notifyAdmins(
+      `⚠️ Hot-wallet TRX kam: ${trx.toFixed(1)} TRX. Payout'lar (gaz) to'xtashi mumkin.\nTo'ldiring: ${config.tronHotWalletAddress}`,
+    ).catch(() => {});
+  } else if (trx >= config.lowTrxAlertTrx * 1.5) {
+    lowTrxAlerted = false; // gisterezis
   }
-  return delivered;
 }
 
-/** Davriy kuzatuv + reconcilerlar. */
-export function startPaymentWatcher(intervalMs = 10000): void {
-  if (!cryptomusEnabled()) {
-    console.log("💤 To'lov watcher o'chiq (Cryptomus sozlanmagan).");
+/** Davriy kuzatuv. */
+export function startPaymentWatcher(intervalMs = 15000): void {
+  if (!tronEnabled()) {
+    console.log("💤 TRON to'lov watcher o'chiq (hot-wallet sozlanmagan).");
     return;
   }
   if (timer) return;
-  timer = setInterval(() => {
-    checkPendingOrders().catch((e) => console.warn("watcher tick xato:", (e as Error).message));
-    reconcilePayouts().catch((e) => console.warn("payout reconcile xato:", (e as Error).message));
-    reconcileRefunds().catch((e) => console.warn("refund reconcile xato:", (e as Error).message));
-  }, intervalMs);
-  console.log("👀 To'lov watcher + payout/refund reconciler (Cryptomus).");
+  const tick = async () => {
+    if (tickBusy) return;
+    tickBusy = true;
+    try {
+      await checkDepositsNow().catch((e) => console.warn("deposit poll:", (e as Error).message));
+      await expireOldDeposits().catch((e) => console.warn("expire deposits:", (e as Error).message));
+      await reconcilePayouts().catch((e) => console.warn("payout reconcile:", (e as Error).message));
+      await checkGas().catch((e) => console.warn("gas check:", (e as Error).message));
+    } finally {
+      tickBusy = false;
+    }
+  };
+  timer = setInterval(tick, intervalMs);
+  void tick();
+  console.log("👀 TRON to'lov watcher (deposit + payout reconcile).");
 }

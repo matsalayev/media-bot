@@ -22,7 +22,8 @@
     "@ton/ton": "^16.3.0",
     "dotenv": "^16.4.5",
     "fastify": "^4.28.1",
-    "grammy": "^1.30.0"
+    "grammy": "^1.30.0",
+    "tronweb": "^6.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",

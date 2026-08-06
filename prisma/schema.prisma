@@ -17,19 +17,57 @@ model User {
   firstName    String?
   languageCode String?
   lang          String? // tanlangan interfeys tili: uz | ru | en
-  tonWallet     String? // creator payout uchun TON hamyon manzili (USDT shu yerga tushadi)
+  tonWallet     String? // yechish uchun TRC20 (TRON) hamyon manzili
+  balanceUsdt   Float    @default(0) // ichki USDT balans (to'ldirish + daromad; sarflash/yechishdan kamayadi)
   acceptedTerms Boolean  @default(false) // foydalanish shartlarini qabul qilganmi
   isBanned      Boolean  @default(false) // bloklangan (yuklash/sotib olish/yechish taqiqlanadi)
   strikes       Int      @default(0) // moderatsiya ogohlantirishlari (limitда auto-ban)
   isAdmin       Boolean  @default(false)
   createdAt     DateTime @default(now())
 
-  unlocks Unlock[]
-  views   View[]
-  uploads Content[]     @relation("creator")
-  likes   ContentLike[]
-  saves   SavedItem[]
-  payouts Payout[]
+  unlocks  Unlock[]
+  views    View[]
+  uploads  Content[]     @relation("creator")
+  likes    ContentLike[]
+  saves    SavedItem[]
+  payouts  Payout[]
+  deposits Deposit[]
+  ledger   LedgerEntry[]
+}
+
+// USDT-TRC20 to'ldirish (top-up) — noyob summa bo'yicha hot-wallet'ga kelgan to'lovni tanib olamiz
+model Deposit {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  address        String // kutilayotgan qabul manzili (hot-wallet)
+  expectedAmount Float // moslash uchun noyob summa (6 kasr): masalan 5.004237
+  status         String    @default("pending") // pending | credited | expired
+  txHash         String?   @unique // kreditlangan on-chain tranzaksiya (ikki marta kreditlashning oldini oladi)
+  actualAmount   Float?
+  createdAt      DateTime  @default(now())
+  creditedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([userId])
+}
+
+// Pul harakati jurnali (audit + balansni tiklash uchun) — har o'zgarish bitta yozuv
+model LedgerEntry {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  deltaUsdt    Float // + kredit / - debet
+  type         String // topup | purchase | earning | platform_fee | withdrawal | withdrawal_refund | refund_credit | refund_clawback | admin_adjust
+  balanceAfter Float
+  refType      String? // content | deposit | payout | refund
+  refId        Int?
+  note         String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model Content {
@@ -125,11 +163,11 @@ model Refund {
   id          Int      @id @default(autoincrement())
   contentId   Int
   buyerTgId   String
-  toAddr      String
+  toAddr      String? // (legacy on-chain refund uchun; endi balansga qaytariladi)
   amountUsdt  Float
-  status      String   @default("processing") // processing | paid | failed
+  status      String   @default("credited") // credited (balansga) | processing | paid | failed
   txHash      String?
-  cmOrderId   String? // Cryptomus payout order_id (resend uchun yangilanadi)
+  cmOrderId   String? // (legacy)
   complaintId Int?
   createdAt   DateTime @default(now())
 
@@ -195,11 +233,15 @@ model Payout {
   userId      Int
   amountStars Int      @default(0) // (legacy)
   amountUsdt  Float    @default(0) // yechilgan USDT
-  toAddress   String? // creator TON manzili
-  tonTxHash   String? // TON tranzaksiya hash'i
-  status      String   @default("requested") // processing | paid | failed | requested | rejected
+  toAddress   String? // qabul qiluvchining TRC20 (TRON) manzili
+  txHash      String? // TRON tranzaksiya hash'i
+  tonTxHash   String? // (legacy)
+  status      String   @default("processing") // processing | paid | failed
+  attempts    Int      @default(0)
   note        String?
   createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([status])
 }

@@ -9,10 +9,10 @@ import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
-import { bot, deliverContent, creatorBalance, requestPayout, createContent, setTonWallet, createComplaint, createReport, assertCanUpload } from "./bot";
-import { cryptomusEnabled, createInvoice } from "./cryptomus";
-import { reconcilePayouts, reconcileRefunds } from "./bot";
-import { settleOrderByNonce } from "./watcher";
+import { bot, deliverContent, sendUnlockedVideo, requestPayout, createContent, setTonWallet, createComplaint, createReport, assertCanUpload, userBalance } from "./bot";
+import { tronEnabled, hotWalletAddress } from "./tron";
+import { purchaseFromBalance, createTopup, withdrawableBalance } from "./ledger";
+import { checkDepositsNow } from "./watcher";
 import { usdtToStars } from "./pricing";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
@@ -100,8 +100,8 @@ export function buildServer() {
           description: c.description,
           priceUsdt: c.priceUsdt,
           reelUrl: await reelSrc(c),
-          unlocked: unlocked.has(c.id) || c.priceUsdt === 0,
-          canReport: unlocked.has(c.id) && c.priceUsdt > 0, // sotib olingan pullik kontent → shikoyat mumkin
+          unlocked: unlocked.has(c.id) || c.priceUsdt === 0 || (userId !== null && c.creatorId === userId),
+          canReport: unlocked.has(c.id) && c.priceUsdt > 0 && c.creatorId !== userId, // sotib olingan pullik kontent → shikoyat mumkin
           liked: liked.has(c.id),
           saved: saved.has(c.id),
           likeCount: c.likeCount,
@@ -127,75 +127,85 @@ export function buildServer() {
       ? await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } })
       : null;
 
-    if (content.priceUsdt === 0 || (alreadyUnlocked && !alreadyUnlocked.refunded)) {
+    const isOwner = !!user && content.creatorId === user.id;
+    if (content.priceUsdt === 0 || isOwner || (alreadyUnlocked && !alreadyUnlocked.refunded)) {
       await deliverContent(tg.id, contentId, content.priceUsdt === 0 ? "free" : "unlock");
       return { status: "delivered" };
     }
-    return { status: "needpay", priceUsdt: content.priceUsdt }; // pullik yoki refund qilingan → kripto oqimi (/api/order)
+    return { status: "needpay", priceUsdt: content.priceUsdt }; // pullik yoki refund qilingan → balansdan (/api/buy)
   });
 
-  // ---- USDT-TRC20 to'lov buyurtmasi (Cryptomus) ----
-  app.post("/api/order", async (req, reply) => {
+  // ---- Sotib olish — ichki USDT balansdan (off-chain, darhol, bepul) ----
+  app.post("/api/buy", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    if (!cryptomusEnabled()) return reply.code(503).send({ error: "to'lov vaqtincha ishlamayapti" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
     if (!contentId) return reply.code(400).send({ error: "contentId kerak" });
 
     const content = await prisma.content.findFirst({ where: { id: contentId, status: "published" } });
     if (!content) return reply.code(404).send({ error: "not found" });
     if (content.priceUsdt <= 0) return reply.code(400).send({ error: "bepul kontent" });
-    if (content.priceUsdt < 0.01) return reply.code(400).send({ error: "narx juda kichik (min $0.01)" });
     if (!content.videoFileId) return reply.code(409).send({ error: "kontent to'liq video yo'q" });
 
     const user = await getUser(tg);
     if (user.isBanned) return reply.code(403).send({ error: "banned", banned: true });
     if (!user.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
-    const already = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
-    if (already && !already.refunded) return { status: "already" };
-    // Ikki marta to'lash/invoice oldini olamiz: yaqinda ochilgan buyurtma bo'lsa yangisini yaratmaymiz
-    const recentPending = await prisma.order.findFirst({
-      where: { buyerTgId: tg.id, contentId, status: "pending", createdAt: { gt: new Date(Date.now() - 90 * 1000) } },
-    });
-    if (recentPending) return reply.code(429).send({ error: "Avvalgi to'lov so'rovi hali ochiq — biroz kuting yoki uni yakunlang." });
 
-    const nonce = randomUUID().replace(/-/g, ""); // Cryptomus order_id
-    await prisma.order.create({ data: { nonce, contentId, buyerTgId: tg.id, amountUsdt: content.priceUsdt, status: "pending" } });
-    const base = (config.publicUrl || "").replace(/\/$/, "");
+    const res = await purchaseFromBalance(user.id, content);
+    if (res.status === "insufficient") {
+      return {
+        status: "needtopup",
+        priceUsdt: content.priceUsdt,
+        balance: res.balance,
+        shortfall: Math.max(0, Math.round((res.price - res.balance) * 1e6) / 1e6),
+      };
+    }
+    // ok yoki already → videoni yetkazamiz
+    await sendUnlockedVideo(tg.id, contentId).catch(() => {});
+    return { status: "delivered" };
+  });
+
+  // ---- Balansni to'ldirish so'rovi — noyob summa + hot-wallet manzili ----
+  app.post("/api/topup", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    if (!tronEnabled()) return reply.code(503).send({ error: "to'ldirish vaqtincha ishlamayapti" });
+    const user = await getUser(tg);
+    if (user.isBanned) return reply.code(403).send({ error: "banned", banned: true });
+    if (!user.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
+    const amount = Math.max(1, Math.min(10000, Number((req.body as { amount?: number })?.amount) || 0));
+    if (!(amount >= 1)) return reply.code(400).send({ error: "summa noto'g'ri (min $1)" });
+    // Ochiq to'ldirishlar cheklovi (spam/DoS + offset fazosini tugatishning oldini oladi)
+    const pendingCount = await prisma.deposit.count({ where: { userId: user.id, status: "pending" } });
+    if (pendingCount >= 6) return reply.code(429).send({ error: "Ochiq to'ldirishlaringiz ko'p — avvalgilarini yakunlang yoki kuting." });
     try {
-      const inv = await createInvoice(nonce, content.priceUsdt, base + "/api/cryptomus/payment", base);
-      return { status: "ok", nonce, amountUsdt: content.priceUsdt, url: inv.url };
+      const dep = await createTopup(user.id, amount);
+      return {
+        status: "ok",
+        depositId: dep.id,
+        address: dep.address,
+        amountUsdt: dep.expectedAmount, // AYNAN shu summani yuborish kerak (moslash uchun)
+        network: "TRC20",
+        ttlMin: config.depositTtlMin,
+      };
     } catch (e) {
-      await prisma.order.updateMany({ where: { nonce }, data: { status: "expired" } });
-      return reply.code(500).send({ error: "to'lov sahifasini yaratib bo'lmadi" });
+      return reply.code(500).send({ error: "to'ldirish so'rovini yaratib bo'lmadi" });
     }
   });
 
-  // ---- To'lov holati (buyurtma bo'yicha) — pending bo'lsa Cryptomus'dan tez tekshiradi ----
-  app.post("/api/order/status", async (req, reply) => {
+  // ---- To'ldirish holati (deposit bo'yicha) — tez javob uchun watcher'ni ham chaqiradi ----
+  app.post("/api/topup/status", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    const nonce = String((req.body as { nonce?: string })?.nonce ?? "");
-    if (!nonce) return reply.code(400).send({ error: "nonce required" });
-    const order = await prisma.order.findUnique({ where: { nonce } });
-    if (!order || order.buyerTgId !== tg.id) return reply.code(404).send({ error: "not found" });
-    if (order.status === "pending") await settleOrderByNonce(nonce).catch(() => {});
-    const fresh = await prisma.order.findUnique({ where: { nonce } });
-    return { status: fresh?.status ?? order.status };
-  });
-
-  // ---- Cryptomus to'lov webhook — status Cryptomus'dan qayta so'raladi (ishonchli, imzoga bog'liq emas) ----
-  app.post("/api/cryptomus/payment", async (req, reply) => {
-    const nonce = String((req.body as { order_id?: string })?.order_id ?? "");
-    if (nonce) await settleOrderByNonce(nonce).catch(() => {});
-    return { ok: true };
-  });
-
-  // ---- Cryptomus payout/refund webhook — reconcilerni yuritamiz ----
-  app.post("/api/cryptomus/payout", async (_req, reply) => {
-    reconcilePayouts().catch(() => {});
-    reconcileRefunds().catch(() => {});
-    return { ok: true };
+    const depositId = Number((req.body as { depositId?: number })?.depositId);
+    if (!depositId) return reply.code(400).send({ error: "depositId required" });
+    const user = await prisma.user.findUnique({ where: { telegramId: tg.id } });
+    const dep = await prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!dep || !user || dep.userId !== user.id) return reply.code(404).send({ error: "not found" });
+    if (dep.status === "pending") await checkDepositsNow().catch(() => {});
+    const fresh = await prisma.deposit.findUnique({ where: { id: depositId } });
+    const bal = await userBalance(user.id);
+    return { status: fresh?.status ?? dep.status, balance: bal };
   });
 
   // ---- Like (toggle) ----
@@ -283,7 +293,11 @@ export function buildServer() {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const user = await getUser(tg);
-    const bal = await creatorBalance(user.id);
+    const bal = await userBalance(user.id);
+    const earnedAgg = await prisma.unlock.aggregate({
+      _sum: { creatorEarnedUsdt: true },
+      where: { refunded: false, content: { creatorId: user.id } },
+    });
     const list = await prisma.content.findMany({
       where: { creatorId: user.id, status: { not: "removed" } },
       orderBy: { id: "desc" },
@@ -292,8 +306,9 @@ export function buildServer() {
     const earned = await prisma.unlock.groupBy({
       by: ["contentId"],
       _sum: { creatorEarnedUsdt: true },
-      where: { content: { creatorId: user.id } },
+      where: { refunded: false, content: { creatorId: user.id } },
     });
+    const withdrawable = await withdrawableBalance(user.id);
     const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarnedUsdt ?? 0]));
     const savedRows = await prisma.savedItem.findMany({
       where: { userId: user.id, content: { status: "published" } },
@@ -311,10 +326,15 @@ export function buildServer() {
       lang: normLang(user.lang),
       user: { firstName: user.firstName, username: user.username },
       balance: bal,
+      withdrawable,
+      earnedTotal: earnedAgg._sum.creatorEarnedUsdt ?? 0,
       minWithdraw: config.minWithdrawUsdt,
+      withdrawFee: config.withdrawFeeUsdt,
       creatorShare: config.creatorSharePercent,
       tonWallet: user.tonWallet ?? "",
-      payoutEnabled: cryptomusEnabled(),
+      payoutEnabled: tronEnabled(),
+      topupEnabled: tronEnabled(),
+      topupAmounts: config.topupAmounts,
       content: await Promise.all(
         list.map(async (c) => ({
           id: c.id,

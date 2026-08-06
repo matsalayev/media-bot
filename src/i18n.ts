@@ -18,20 +18,20 @@ const S: Record<string, Entry> = {
     en: "✅ Language set.",
   },
   welcome: {
-    uz: "🎬 Media'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini USDT (TON) evaziga oching — to'liq video shu chatga keladi.\n\n💡 O'z videongizni joylab, har sotuvdan 90% ishlang: /upload",
-    ru: "🎬 Добро пожаловать в Media!\n\nСмотрите короткие видео, понравившееся открывайте за USDT (TON) — полное видео придёт в этот чат.\n\n💡 Публикуйте свои видео и зарабатывайте 90% с продажи: /upload",
-    en: "🎬 Welcome to Media!\n\nWatch short videos, unlock the ones you like with USDT (TON) — the full video is sent to this chat.\n\n💡 Post your own videos and earn 90% per sale: /upload",
+    uz: "🎬 Media'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini oching — to'liq video shu chatga keladi. To'lov ichki USDT balansingizdan yechiladi; balansni USDT-TRC20 (TRON) bilan to'ldirasiz.\n\n💡 O'z videongizni joylab, har sotuvdan 90% ishlang: /upload",
+    ru: "🎬 Добро пожаловать в Media!\n\nСмотрите короткие видео, понравившееся открывайте — полное видео придёт в этот чат. Оплата списывается с внутреннего USDT баланса; баланс пополняете через USDT-TRC20 (TRON).\n\n💡 Публикуйте свои видео и зарабатывайте 90% с продажи: /upload",
+    en: "🎬 Welcome to Media!\n\nWatch short videos and unlock the ones you like — the full video is sent to this chat. Payment is taken from your internal USDT balance, which you top up via USDT-TRC20 (TRON).\n\n💡 Post your own videos and earn 90% per sale: /upload",
   },
   openApp: { uz: "🎬 Ochish", ru: "🎬 Открыть", en: "🎬 Open" },
   help: {
-    uz: "🎬 Menyudagi «Media» tugmasi orqali ilovani oching.\n\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromadim (USDT)\n/wallet — TON hamyonni ulash\n/withdraw — USDT'ni hamyonga yechish\n/lang — tilni o'zgartirish",
-    ru: "🎬 Откройте приложение кнопкой «Media» в меню.\n\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — мой доход (USDT)\n/wallet — привязать TON кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык",
-    en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings (USDT)\n/wallet — link TON wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language",
+    uz: "🎬 Menyudagi «Media» tugmasi orqali ilovani oching.\n\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromadim (USDT)\n/wallet — TRC20 hamyon ulash\n/withdraw — USDT'ni hamyonga yechish\n/lang — tilni o'zgartirish",
+    ru: "🎬 Откройте приложение кнопкой «Media» в меню.\n\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — мой доход (USDT)\n/wallet — привязать TRC20 кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык",
+    en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings (USDT)\n/wallet — link TRC20 wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language",
   },
   adminPanel: {
-    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TON hamyonni ulash\n/withdraw — USDT'ni hamyonga yechish\n/terms — foydalanish shartlari\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — Stars balansi + komissiya + hot-wallet\n/hotwallet — hot-wallet manzili va balansi\n/payouts — payout tarixi\n/complaints — aldov shikoyatlari\n/resolvepayout — payoutni qo'lda hal qilish\n/resolverefund — refundni qo'lda hal qilish\n\n🛡 Moderatsiya:\n/reports — shikoyatlar ro'yxati\n/takedown <id> — kontentni o'chirish\n/ban <tgId> — foydalanuvchini bloklash\n/unban <tgId> — blokdan chiqarish",
-    ru: "🛠 Админ-панель — все команды\n\n👤 Пользователь:\n/start — начать / выбрать язык\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — доход (USDT)\n/wallet — привязать TON кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык\n/help — помощь\n/cancel — отменить процесс\n\n🔑 Админ:\n/admin — эта панель\n/add — добавить видео (админ)\n/balance — баланс Stars + комиссия + hot-wallet\n/hotwallet — адрес и баланс hot-wallet\n/payouts — история выплат\n/complaints — жалобы на обман\n/resolvepayout — выплата вручную\n/resolverefund — возврат вручную",
-    en: "🛠 Admin panel — all commands\n\n👤 User:\n/start — start / choose language\n/upload — post a video\n/mycontent — my content\n/earnings — earnings (USDT)\n/wallet — link TON wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language\n/help — help\n/cancel — cancel the flow\n\n🔑 Admin:\n/admin — this panel\n/add — add a video (admin)\n/balance — Stars balance + commission + hot-wallet\n/hotwallet — hot-wallet address and balance\n/payouts — payout history\n/complaints — bait complaints\n/resolvepayout — resolve a payout manually\n/resolverefund — resolve a refund manually",
+    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TRC20 hamyon ulash\n/withdraw — USDT'ni hamyonga yechish\n/terms — foydalanish shartlari\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — statistika + hot-wallet\n/hotwallet — hot-wallet manzili va balansi (USDT/TRX)\n/payouts — payout tarixi\n/complaints — aldov shikoyatlari\n/resolvepayout — payoutni qo'lda hal qilish\n/credit <tgId> <usdt> — balansni qo'lda to'ldirish\n\n🛡 Moderatsiya:\n/reports — shikoyatlar ro'yxati\n/takedown <id> — kontentni o'chirish\n/ban <tgId> — foydalanuvchini bloklash\n/unban <tgId> — blokdan chiqarish",
+    ru: "🛠 Админ-панель — все команды\n\n👤 Пользователь:\n/start — начать / выбрать язык\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — доход (USDT)\n/wallet — привязать TRC20 кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык\n/help — помощь\n/cancel — отменить процесс\n\n🔑 Админ:\n/admin — эта панель\n/add — добавить видео (админ)\n/balance — статистика + hot-wallet\n/hotwallet — адрес и баланс hot-wallet (USDT/TRX)\n/payouts — история выплат\n/complaints — жалобы на обман\n/resolvepayout — выплата вручную\n/credit <tgId> <usdt> — пополнить баланс вручную",
+    en: "🛠 Admin panel — all commands\n\n👤 User:\n/start — start / choose language\n/upload — post a video\n/mycontent — my content\n/earnings — earnings (USDT)\n/wallet — link TRC20 wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language\n/help — help\n/cancel — cancel the flow\n\n🔑 Admin:\n/admin — this panel\n/add — add a video (admin)\n/balance — stats + hot-wallet\n/hotwallet — hot-wallet address and balance (USDT/TRX)\n/payouts — payout history\n/complaints — bait complaints\n/resolvepayout — resolve a payout manually\n/credit <tgId> <usdt> — top up a balance manually",
   },
   uploadStart: {
     uz: "🎬 Yangi video.\n\n1/3 — Qisqa REELS videoni (vertikal) yuboring.\n\nBekor qilish: /cancel",
@@ -87,14 +87,14 @@ const S: Record<string, Entry> = {
     en: "Minimum {min} USDT required to withdraw. Available: {available} USDT",
   },
   needWallet: {
-    uz: "Avval TON hamyon manzilingizni ulang:\n/wallet <manzil>\n(yoki ilova profilidan)",
-    ru: "Сначала привяжите адрес TON кошелька:\n/wallet <адрес>\n(или в профиле приложения)",
-    en: "First link your TON wallet address:\n/wallet <address>\n(or in the app profile)",
+    uz: "Avval TRC20 (TRON) hamyon manzilingizni ulang:\n/wallet <manzil>\n(yoki ilova profilidan)",
+    ru: "Сначала привяжите адрес TRC20 (TRON) кошелька:\n/wallet <адрес>\n(или в профиле приложения)",
+    en: "First link your TRC20 (TRON) wallet address:\n/wallet <address>\n(or in the app profile)",
   },
   walletPrompt: {
-    uz: "TON hamyoningizni ulang (USDT shu manzilga tushadi):\n/wallet <manzil>\n\n{current}",
-    ru: "Привяжите TON кошелёк (USDT придёт на этот адрес):\n/wallet <адрес>\n\n{current}",
-    en: "Link your TON wallet (USDT arrives to this address):\n/wallet <address>\n\n{current}",
+    uz: "TRC20 (TRON) hamyoningizni ulang (yechilgan USDT shu manzilga tushadi):\n/wallet <manzil>\n\n{current}",
+    ru: "Привяжите TRC20 (TRON) кошелёк (выведенный USDT придёт на этот адрес):\n/wallet <адрес>\n\n{current}",
+    en: "Link your TRC20 (TRON) wallet (withdrawn USDT arrives to this address):\n/wallet <address>\n\n{current}",
   },
   walletCurrent: {
     uz: "Joriy: {addr}",
@@ -102,14 +102,14 @@ const S: Record<string, Entry> = {
     en: "Current: {addr}",
   },
   walletSaved: {
-    uz: "✅ TON hamyon saqlandi:\n{addr}",
-    ru: "✅ TON кошелёк сохранён:\n{addr}",
-    en: "✅ TON wallet saved:\n{addr}",
+    uz: "✅ TRC20 hamyon saqlandi:\n{addr}",
+    ru: "✅ TRC20 кошелёк сохранён:\n{addr}",
+    en: "✅ TRC20 wallet saved:\n{addr}",
   },
   walletInvalid: {
-    uz: "❌ Noto'g'ri TON manzil. Tonkeeper'dan to'liq manzilni nusxalang.",
-    ru: "❌ Неверный TON адрес. Скопируйте полный адрес из Tonkeeper.",
-    en: "❌ Invalid TON address. Copy the full address from Tonkeeper.",
+    uz: "❌ Noto'g'ri TRC20 manzil. Manzil «T» bilan boshlanadi (masalan Trust Wallet / Binance TRON).",
+    ru: "❌ Неверный TRC20 адрес. Адрес начинается с «T» (например Trust Wallet / Binance TRON).",
+    en: "❌ Invalid TRC20 address. It starts with «T» (e.g. Trust Wallet / Binance TRON).",
   },
   payoutPending: {
     uz: "⏳ Oldingi yechish so'rovingiz hali jarayonda. Biroz kuting.",
@@ -117,9 +117,9 @@ const S: Record<string, Entry> = {
     en: "⏳ Your previous withdrawal is still processing. Please wait.",
   },
   payoutOffline: {
-    uz: "⚙️ Payout hozircha sozlanmoqda. Keyinroq urinib ko'ring.",
-    ru: "⚙️ Выплаты пока настраиваются. Попробуйте позже.",
-    en: "⚙️ Payouts are being set up. Please try again later.",
+    uz: "⚙️ Yechish hozircha o'chiq (hot-wallet sozlanmoqda). Keyinroq urinib ko'ring.",
+    ru: "⚙️ Вывод пока отключён (настраивается hot-wallet). Попробуйте позже.",
+    en: "⚙️ Withdrawals are off (hot-wallet is being set up). Try again later.",
   },
   payoutNoLiquidity: {
     uz: "⏳ Hozircha yechib bo'lmadi (texnik sabab). Tez orada hal bo'ladi.",
@@ -142,9 +142,9 @@ const S: Record<string, Entry> = {
     en: "❌ Withdrawal failed. The admin has been notified.",
   },
   terms: {
-    uz: "📄 Foydalanish shartlari\n\n1. Media — kontent almashish platformasi. Pullik kontent USDT (TON tarmog'i) orqali sotib olinadi.\n\n2. To'lovlar blokcheynda amalga oshadi va qaytarib bo'lmaydi — quyidagi holatdan tashqari.\n\n3. 🛡 Aldov himoyasi: agar qisqa reel to'liq videoga mos kelmasa (aldov), «⚠️ Shikoyat» tugmasi orqali murojaat qilishingiz mumkin. Admin tekshiradi; tasdiqlansa to'lovingizning 90% qaytariladi (10% tizim komissiyasi qaytarilmaydi).\n\n4. Mualliflar har sotuvdan 90% oladi, platforma 10% komissiya oladi.\n\n5. Kontent uchun javobgarlik uni joylagan muallifda. Noqonuniy yoki aldov kontent taqiqlanadi.\n\n6. Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
-    ru: "📄 Условия использования\n\n1. Media — платформа обмена контентом. Платный контент покупается за USDT (сеть TON).\n\n2. Платежи проходят в блокчейне и не возвращаются — кроме случая ниже.\n\n3. 🛡 Защита от обмана: если короткий reel не соответствует полному видео (обман), вы можете подать «⚠️ Жалобу». Админ проверит; при подтверждении вернётся 90% оплаты (10% комиссии не возвращается).\n\n4. Авторы получают 90% с каждой продажи, платформа — 10% комиссии.\n\n5. Ответственность за контент несёт автор. Незаконный или мошеннический контент запрещён.\n\n6. Безопасность вашего кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
-    en: "📄 Terms of Use\n\n1. Media is a content-sharing platform. Paid content is purchased with USDT (TON network).\n\n2. Payments settle on-chain and are non-refundable — except as below.\n\n3. 🛡 Fraud protection: if a short reel does not match the full video (bait), you may file a «⚠️ Complaint». The admin reviews it; if approved, 90% of your payment is refunded (the 10% platform commission is non-refundable).\n\n4. Creators earn 90% of each sale; the platform takes a 10% commission.\n\n5. Creators are responsible for their content. Illegal or fraudulent content is prohibited.\n\n6. The security of your wallet and keys is your own responsibility.\n\nTo continue, please accept the terms.",
+    uz: "📄 Foydalanish shartlari\n\n1. Media — kontent almashish platformasi. Pullik kontent ichki USDT balansdan sotib olinadi; balans USDT-TRC20 (TRON tarmog'i) bilan to'ldiriladi.\n\n2. To'ldirish blokcheynda amalga oshadi. Sotib olingan kontent uchun to'lov qaytarilmaydi — quyidagi aldov holatidan tashqari.\n\n3. 🛡 Aldov himoyasi: agar qisqa reel to'liq videoga mos kelmasa (aldov), «⚠️ Shikoyat» tugmasi orqali murojaat qilishingiz mumkin. Admin tekshiradi; tasdiqlansa to'lovingizning 90% qaytariladi (10% tizim komissiyasi qaytarilmaydi).\n\n4. Mualliflar har sotuvdan 90% oladi, platforma 10% komissiya oladi.\n\n5. Kontent uchun javobgarlik uni joylagan muallifda. Noqonuniy yoki aldov kontent taqiqlanadi.\n\n6. Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
+    ru: "📄 Условия использования\n\n1. Media — платформа обмена контентом. Платный контент покупается с внутреннего USDT баланса; баланс пополняется через USDT-TRC20 (сеть TRON).\n\n2. Пополнение проходит в блокчейне. Оплата за купленный контент не возвращается — кроме случая обмана ниже.\n\n3. 🛡 Защита от обмана: если короткий reel не соответствует полному видео (обман), вы можете подать «⚠️ Жалобу». Админ проверит; при подтверждении вернётся 90% оплаты (10% комиссии не возвращается).\n\n4. Авторы получают 90% с каждой продажи, платформа — 10% комиссии.\n\n5. Ответственность за контент несёт автор. Незаконный или мошеннический контент запрещён.\n\n6. Безопасность вашего кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
+    en: "📄 Terms of Use\n\n1. Media is a content-sharing platform. Paid content is purchased from your internal USDT balance, topped up via USDT-TRC20 (TRON network).\n\n2. Top-ups settle on-chain. Payment for purchased content is non-refundable — except for the bait case below.\n\n3. 🛡 Fraud protection: if a short reel does not match the full video (bait), you may file a «⚠️ Complaint». The admin reviews it; if approved, 90% of your payment is refunded (the 10% platform commission is non-refundable).\n\n4. Creators earn 90% of each sale; the platform takes a 10% commission.\n\n5. Creators are responsible for their content. Illegal or fraudulent content is prohibited.\n\n6. The security of your wallet and keys is your own responsibility.\n\nTo continue, please accept the terms.",
   },
   termsAgree: { uz: "✅ Roziman", ru: "✅ Принимаю", en: "✅ I agree" },
   termsAccepted: {
@@ -173,9 +173,9 @@ const S: Record<string, Entry> = {
     en: "You must purchase the content before reporting it.",
   },
   refundBuyer: {
-    uz: "✅ «{title}» bo'yicha shikoyatingiz tasdiqlandi. {amount} USDT hamyoningizga qaytarildi.",
-    ru: "✅ Ваша жалоба по «{title}» подтверждена. {amount} USDT возвращено на кошелёк.",
-    en: "✅ Your complaint about «{title}» was approved. {amount} USDT refunded to your wallet.",
+    uz: "✅ «{title}» bo'yicha shikoyatingiz tasdiqlandi. {amount} USDT balansingizga qaytarildi (yechib olishingiz mumkin).",
+    ru: "✅ Ваша жалоба по «{title}» подтверждена. {amount} USDT возвращено на ваш баланс (можно вывести).",
+    en: "✅ Your complaint about «{title}» was approved. {amount} USDT was credited to your balance (you can withdraw it).",
   },
   refundRejected: {
     uz: "«{title}» bo'yicha shikoyatingiz ko'rib chiqildi, lekin aldov tasdiqlanmadi.",

@@ -28,15 +28,17 @@ const UI = {
     enterTitle: "Sarlavha kiriting", uploading: "Yuklanmoqda…", uploadedOk: "✅ Joylandi!", errGeneric: "Xatolik yuz berdi",
     free: "bepul", walletTitle: "USDT-TRC20 hamyon (yechish uchun)", walletPlaceholder: "TRC20 manzil (T… bilan boshlanadi)",
     payOpen: "💳 To'lov sahifasi ochildi — USDT-TRC20 to'lang, video keladi", bannedMsg: "⛔ Hisobingiz bloklangan",
-    walletSave: "Saqlash", walletSavedToast: "✅ Hamyon saqlandi", walletNeeded: "Avval TON hamyon manzilingizni saqlang",
+    walletSave: "Saqlash", walletSavedToast: "✅ Hamyon saqlandi", walletNeeded: "Avval TRC20 hamyon manzilingizni saqlang",
     withdrawing: "Yuborilmoqda…", paymentPending: "⏳ To'lov tekshirilmoqda…", walletErr: "Hamyon ulanmadi",
     editVideo: "Videoni tahrirlash", save: "Saqlash", deleteBtn: "O'chirish", cancelBtn: "Bekor qilish",
     deleteAsk: "Videoni o'chirasizmi?", deleted: "🗑 O'chirildi", updated: "✅ Saqlandi",
     views: "ko'rish", sales: "sotildi", videosN: "video", earnedShort: "ishlangan", price: "Narx",
     reportBtn: "Aldov — shikoyat qilish", reportAsk: "Bu reel to'liq videoga mos kelmadimi? Aldov shikoyati yuborilsinmi?",
     termsTitle: "Foydalanish shartlari", termsAgree: "✅ Roziman",
-    termsText: "Media — kontent platformasi. Pullik kontent USDT (TON tarmog'i) orqali sotib olinadi.\n\n• To'lovlar blokcheynda amalga oshadi va qaytarilmaydi — aldov holatidan tashqari.\n• 🛡 Aldov himoyasi: qisqa reel to'liq videoga mos kelmasa, «⚠️ Shikoyat» qiling. Admin tasdiqlasa, to'lovingizning 90% qaytariladi (10% komissiya qaytmaydi).\n• Mualliflar har sotuvdan 90%, platforma 10% oladi.\n• Kontent uchun javobgarlik uni joylagan muallifda.\n• Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
+    termsText: "Media — kontent platformasi. Pullik kontent ichki USDT balansdan sotib olinadi; balans USDT-TRC20 (TRON) bilan to'ldiriladi.\n\n• Sotib olingan kontent uchun to'lov qaytarilmaydi — aldov holatidan tashqari.\n• 🛡 Aldov himoyasi: qisqa reel to'liq videoga mos kelmasa, «⚠️ Shikoyat» qiling. Admin tasdiqlasa, to'lovingizning 90% qaytariladi (10% komissiya qaytmaydi).\n• Mualliflar har sotuvdan 90%, platforma 10% oladi.\n• Kontent uchun javobgarlik uni joylagan muallifda.\n• Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
     reportTitle: "Shikoyat qilish", reportThanks: "✅ Shikoyat yuborildi", catIllegal: "🚫 Noqonuniy kontent", catSexual: "🔞 Jinsiy / voyaga yetmagan", catCopyright: "©️ Mualliflik huquqi", catViolence: "⚔️ Zo'ravonlik", catOther: "• Boshqa sabab",
+    topupTitle: "Balansni to'ldirish", topupBtn: "To'ldirish", balanceTitle: "Balansingiz", close: "Yopish", copied: "📋 Nusxalandi", feeNote: "tarmoq haqi", payoutSoon: "⚙️ Hozircha o'chiq, keyinroq urinib ko'ring", heldNote: "⏳ Pishmoqda (nizolar oynasi):",
+    topupPick: "To'ldirish summasini tanlang (USDT):", topupNeed: "Bu video uchun kamida", topupSendExact: "AYNAN shu summani yuboring (USDT-TRC20):", topupAddress: "Manzil (TRON / TRC20):", topupWaiting: "To'lov kutilmoqda…", topupDone: "Balans to'ldirildi!", topupExpired: "Muddati o'tdi — qayta urinib ko'ring", topupNote: "⚠️ Faqat TRON (TRC20) tarmog'ida, AYNAN yuqoridagi summada yuboring. 1–2 daqiqada tushadi.",
   },
   ru: {
     navReels: "Media", navSaved: "Сохранённые", navEarning: "Доход", navProfile: "Профиль",
@@ -52,15 +54,17 @@ const UI = {
     enterTitle: "Введите название", uploading: "Загрузка…", uploadedOk: "✅ Опубликовано!", errGeneric: "Произошла ошибка",
     free: "бесплатно", walletTitle: "USDT-TRC20 кошелёк (для вывода)", walletPlaceholder: "TRC20 адрес (начинается с T…)",
     payOpen: "💳 Открыта страница оплаты — оплатите USDT-TRC20, видео придёт", bannedMsg: "⛔ Ваш аккаунт заблокирован",
-    walletSave: "Сохранить", walletSavedToast: "✅ Кошелёк сохранён", walletNeeded: "Сначала сохраните TON адрес",
+    walletSave: "Сохранить", walletSavedToast: "✅ Кошелёк сохранён", walletNeeded: "Сначала сохраните TRC20 адрес",
     withdrawing: "Отправка…", paymentPending: "⏳ Проверяем оплату…", walletErr: "Кошелёк не подключён",
     editVideo: "Редактировать видео", save: "Сохранить", deleteBtn: "Удалить", cancelBtn: "Отмена",
     deleteAsk: "Удалить видео?", deleted: "🗑 Удалено", updated: "✅ Сохранено",
     views: "просм.", sales: "продано", videosN: "видео", earnedShort: "заработано", price: "Цена",
     reportBtn: "Обман — пожаловаться", reportAsk: "Этот reel не соответствует полному видео? Отправить жалобу на обман?",
     termsTitle: "Условия использования", termsAgree: "✅ Принимаю",
-    termsText: "Media — платформа контента. Платный контент покупается за USDT (сеть TON).\n\n• Платежи проходят в блокчейне и не возвращаются — кроме случая обмана.\n• 🛡 Защита от обмана: если короткий reel не соответствует полному видео, подайте «⚠️ Жалобу». При подтверждении вернётся 90% (10% комиссии не возвращается).\n• Авторы получают 90% с продажи, платформа — 10%.\n• Ответственность за контент несёт автор.\n• Безопасность кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
+    termsText: "Media — платформа контента. Платный контент покупается с внутреннего USDT баланса; баланс пополняется через USDT-TRC20 (TRON).\n\n• Оплата за купленный контент не возвращается — кроме случая обмана.\n• 🛡 Защита от обмана: если короткий reel не соответствует полному видео, подайте «⚠️ Жалобу». При подтверждении вернётся 90% (10% комиссии не возвращается).\n• Авторы получают 90% с продажи, платформа — 10%.\n• Ответственность за контент несёт автор.\n• Безопасность кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
     reportTitle: "Пожаловаться", reportThanks: "✅ Жалоба отправлена", catIllegal: "🚫 Незаконный контент", catSexual: "🔞 Секс / несовершеннолетние", catCopyright: "©️ Авторские права", catViolence: "⚔️ Насилие", catOther: "• Другое",
+    topupTitle: "Пополнить баланс", topupBtn: "Пополнить", balanceTitle: "Ваш баланс", close: "Закрыть", copied: "📋 Скопировано", feeNote: "сетевая комиссия", payoutSoon: "⚙️ Пока отключено, попробуйте позже", heldNote: "⏳ Созревает (окно споров):",
+    topupPick: "Выберите сумму пополнения (USDT):", topupNeed: "Для этого видео минимум", topupSendExact: "Отправьте ТОЧНО эту сумму (USDT-TRC20):", topupAddress: "Адрес (TRON / TRC20):", topupWaiting: "Ожидаем оплату…", topupDone: "Баланс пополнен!", topupExpired: "Срок истёк — попробуйте снова", topupNote: "⚠️ Только сеть TRON (TRC20), ТОЧНО указанной суммой. Зачислится за 1–2 минуты.",
   },
   en: {
     navReels: "Media", navSaved: "Saved", navEarning: "Earnings", navProfile: "Profile",
@@ -76,15 +80,17 @@ const UI = {
     enterTitle: "Enter a title", uploading: "Uploading…", uploadedOk: "✅ Published!", errGeneric: "Something went wrong",
     free: "free", walletTitle: "USDT-TRC20 wallet (for withdrawal)", walletPlaceholder: "TRC20 address (starts with T…)",
     payOpen: "💳 Payment page opened — pay USDT-TRC20 and the video will arrive", bannedMsg: "⛔ Your account is banned",
-    walletSave: "Save", walletSavedToast: "✅ Wallet saved", walletNeeded: "Save your TON wallet address first",
+    walletSave: "Save", walletSavedToast: "✅ Wallet saved", walletNeeded: "Save your TRC20 wallet address first",
     withdrawing: "Sending…", paymentPending: "⏳ Verifying payment…", walletErr: "Wallet not connected",
     editVideo: "Edit video", save: "Save", deleteBtn: "Delete", cancelBtn: "Cancel",
     deleteAsk: "Delete this video?", deleted: "🗑 Deleted", updated: "✅ Saved",
     views: "views", sales: "sales", videosN: "videos", earnedShort: "earned", price: "Price",
     reportBtn: "Report bait", reportAsk: "Doesn't this reel match the full video? Send a bait complaint?",
     termsTitle: "Terms of Use", termsAgree: "✅ I agree",
-    termsText: "Media is a content platform. Paid content is purchased with USDT (TON network).\n\n• Payments settle on-chain and are non-refundable — except in cases of bait.\n• 🛡 Fraud protection: if a short reel doesn't match the full video, file a «⚠️ Complaint». If approved, 90% is refunded (the 10% commission is non-refundable).\n• Creators earn 90% per sale, the platform takes 10%.\n• Creators are responsible for their content.\n• The security of your wallet and keys is your own responsibility.\n\nAccept the terms to continue.",
+    termsText: "Media is a content platform. Paid content is purchased from your internal USDT balance, topped up via USDT-TRC20 (TRON).\n\n• Payment for purchased content is non-refundable — except in cases of bait.\n• 🛡 Fraud protection: if a short reel doesn't match the full video, file a «⚠️ Complaint». If approved, 90% is refunded (the 10% commission is non-refundable).\n• Creators earn 90% per sale, the platform takes 10%.\n• Creators are responsible for their content.\n• The security of your wallet and keys is your own responsibility.\n\nAccept the terms to continue.",
     reportTitle: "Report", reportThanks: "✅ Report sent", catIllegal: "🚫 Illegal content", catSexual: "🔞 Sexual / minors", catCopyright: "©️ Copyright", catViolence: "⚔️ Violence", catOther: "• Other",
+    topupTitle: "Top up balance", topupBtn: "Top up", balanceTitle: "Your balance", close: "Close", copied: "📋 Copied", feeNote: "network fee", payoutSoon: "⚙️ Off for now, try again later", heldNote: "⏳ Maturing (dispute window):",
+    topupPick: "Choose a top-up amount (USDT):", topupNeed: "For this video at least", topupSendExact: "Send EXACTLY this amount (USDT-TRC20):", topupAddress: "Address (TRON / TRC20):", topupWaiting: "Waiting for payment…", topupDone: "Balance topped up!", topupExpired: "Expired — please try again", topupNote: "⚠️ Only TRON (TRC20) network, EXACTLY the amount above. Credited in 1–2 minutes.",
   },
 };
 let LANG = "uz";
@@ -368,11 +374,11 @@ async function deliverFree(it, btn) {
     btn.disabled = false;
   }
 }
-// Cryptomus: to'lov sahifasini ochamiz, foydalanuvchi istalgan wallet'dan USDT-TRC20 to'laydi
+// Ichki USDT balansdan sotib olamiz (darhol, bepul). Yetmasa — to'ldirish oynasi.
 async function buyCrypto(it, btn) {
   btn.disabled = true;
   try {
-    const d = await (await fetch("/api/order", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) })).json();
+    const d = await (await fetch("/api/buy", { method: "POST", headers: HEADERS, body: JSON.stringify({ contentId: it.id }) })).json();
     if (needTerms(d)) {
       btn.disabled = false;
       return;
@@ -382,49 +388,144 @@ async function buyCrypto(it, btn) {
       btn.disabled = false;
       return;
     }
-    if (d.status === "already") {
+    if (d.status === "delivered") {
       it.unlocked = true;
       btn.textContent = watchLabel(it);
-      return deliverFree(it, btn);
-    }
-    if (d.status !== "ok" || !d.url) {
-      toast(d.error || L("errGeneric"));
       btn.disabled = false;
+      meCache = null; // balans o'zgardi
+      toast(L("sentToChat"));
       return;
     }
-    if (tg && tg.openLink) tg.openLink(d.url);
-    else window.open(d.url, "_blank");
-    toast(L("payOpen"));
-    pollOrder(d.nonce, it, btn, 0);
+    if (d.status === "needtopup") {
+      btn.disabled = false;
+      openTopup(d.shortfall || d.priceUsdt, it, btn);
+      return;
+    }
+    toast(d.error || L("errGeneric"));
+    btn.disabled = false;
   } catch (e) {
     toast(L("connErr"));
     btn.disabled = false;
   }
 }
-function pollOrder(nonce, it, btn, tries) {
-  if (tries > 45) {
-    btn.textContent = "⏳"; // to'landi, lekin tasdiq sekin — "sotib olish" ko'rinmasin
-    toast(L("sentToChatHint"));
-    return;
+
+// ---------------- Balansni to'ldirish (USDT-TRC20) ----------------
+let topupPollTimer = null;
+async function openTopup(minAmount, it, btn) {
+  let d;
+  try {
+    d = await getMe();
+  } catch (e) {
+    return void toast(L("connErr"));
   }
-  setTimeout(async () => {
+  if (!d.topupEnabled) return void toast(L("payoutSoon"));
+  const amounts = d.topupAmounts && d.topupAmounts.length ? d.topupAmounts.slice() : [3, 5, 10, 20, 50];
+  const need = Math.max(1, Math.ceil(minAmount || 1));
+  const overlay = document.createElement("div");
+  overlay.className = "sheet-overlay";
+  overlay.innerHTML =
+    '<div class="sheet topup-sheet">' +
+    '<div class="sheet-title">' + L("topupTitle") + "</div>" +
+    '<div class="topup-body"></div>' +
+    '<button class="ghost sheet-close">' + L("close") + "</button>" +
+    "</div>";
+  document.body.appendChild(overlay);
+  const body = overlay.querySelector(".topup-body");
+  const close = () => {
+    if (topupPollTimer) clearTimeout(topupPollTimer);
+    overlay.remove();
+  };
+  overlay.querySelector(".sheet-close").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+  const chips = document.createElement("div");
+  chips.className = "amount-chips";
+  amounts.forEach((a) => {
+    const c = document.createElement("button");
+    c.className = "chip" + (a >= need ? "" : " dim");
+    c.textContent = "$" + a;
+    c.addEventListener("click", () => startTopup(a, body, it, btn, close));
+    chips.appendChild(c);
+  });
+  body.innerHTML = '<div class="topup-hint">' + L("topupPick") + "</div>";
+  body.appendChild(chips);
+  if (need > 1) {
+    const nh = document.createElement("div");
+    nh.className = "topup-hint";
+    nh.textContent = L("topupNeed") + " $" + usd(need);
+    body.appendChild(nh);
+  }
+}
+
+async function startTopup(amount, body, it, btn, close) {
+  body.innerHTML = '<div class="topup-hint">…</div>';
+  let d;
+  try {
+    d = await (await fetch("/api/topup", { method: "POST", headers: HEADERS, body: JSON.stringify({ amount }) })).json();
+  } catch (e) {
+    return void (body.innerHTML = '<div class="topup-hint">' + L("connErr") + "</div>");
+  }
+  if (needTerms(d)) return void close();
+  if (!d || d.status !== "ok") return void (body.innerHTML = '<div class="topup-hint">' + ((d && d.error) || L("errGeneric")) + "</div>");
+  const amt = d.amountUsdt;
+  body.innerHTML =
+    '<div class="topup-hint">' + L("topupSendExact") + "</div>" +
+    '<div class="copy-field"><span class="cf-val">' + amt + ' USDT</span><button class="cf-btn" data-copy="' + amt + '">📋</button></div>' +
+    '<div class="topup-hint">' + L("topupAddress") + "</div>" +
+    '<div class="copy-field"><span class="cf-val addr">' + d.address + '</span><button class="cf-btn" data-copy="' + d.address + '">📋</button></div>' +
+    '<div class="topup-status">⏳ ' + L("topupWaiting") + "</div>" +
+    '<div class="topup-note">' + L("topupNote") + "</div>";
+  body.querySelectorAll(".cf-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      copyText(b.getAttribute("data-copy"));
+      toast(L("copied"));
+    }),
+  );
+  pollTopup(d.depositId, body, it, btn, close, 0);
+}
+
+function pollTopup(depositId, body, it, btn, close, tries) {
+  if (tries > 150) return; // ~10 daqiqa
+  topupPollTimer = setTimeout(async () => {
+    let d;
     try {
-      const d = await (await fetch("/api/order/status", { method: "POST", headers: HEADERS, body: JSON.stringify({ nonce }) })).json();
-      if (d.status === "paid") {
-        it.unlocked = true;
-        btn.textContent = watchLabel(it);
-        btn.disabled = false;
-        toast(L("sentToChatHint"));
-        return;
-      }
-      if (d.status === "expired") {
-        toast(L("paymentFailed"));
-        btn.disabled = false;
-        return;
-      }
-    } catch (e) {}
-    pollOrder(nonce, it, btn, tries + 1);
+      d = await (await fetch("/api/topup/status", { method: "POST", headers: HEADERS, body: JSON.stringify({ depositId }) })).json();
+    } catch (e) {
+      return pollTopup(depositId, body, it, btn, close, tries + 1);
+    }
+    const st = body.querySelector(".topup-status");
+    if (d.status === "credited") {
+      meCache = null;
+      if (st) st.textContent = "✅ " + L("topupDone") + " $" + usd(d.balance);
+      toast("✅ " + L("topupDone"));
+      setTimeout(() => {
+        close();
+        if (it && btn) buyCrypto(it, btn);
+        else renderProfile();
+      }, 1200);
+      return;
+    }
+    if (d.status === "expired") {
+      if (st) st.textContent = "❌ " + L("topupExpired");
+      return;
+    }
+    pollTopup(depositId, body, it, btn, close, tries + 1);
   }, 4000);
+}
+
+function copyText(v) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(String(v));
+    else {
+      const ta = document.createElement("textarea");
+      ta.value = String(v);
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+  } catch (e) {}
 }
 
 // ---------------- Autoplay + cheksiz aylanish ----------------
@@ -660,16 +761,17 @@ async function renderEarning() {
   } catch (e) {
     return void (card.innerHTML = '<div class="card-title">' + L("connErr") + "</div>");
   }
-  const b = d.balance || { earned: 0, available: 0 };
+  const balance = typeof d.balance === "number" ? d.balance : 0;
+  const earnedTotal = d.earnedTotal || 0;
   const content = d.content || [];
   const totalSales = content.reduce((s, c) => s + (c.unlocks || 0), 0);
   card.innerHTML =
     '<div class="card-title">' + L("totalEarned") + " (" + d.creatorShare + "%)</div>" +
-    '<div class="big">$' + usd(b.earned) + "</div>" +
+    '<div class="big">$' + usd(earnedTotal) + "</div>" +
     '<div class="stat-grid">' +
     '<div class="box"><div class="n">' + content.length + '</div><div class="l">' + L("videosN") + "</div></div>" +
     '<div class="box"><div class="n">' + totalSales + '</div><div class="l">' + L("sales") + "</div></div>" +
-    '<div class="box"><div class="n">$' + usd(Math.max(0, b.available)) + '</div><div class="l">' + L("available") + "</div></div>" +
+    '<div class="box"><div class="n">$' + usd(Math.max(0, balance)) + '</div><div class="l">' + L("available") + "</div></div>" +
     "</div>";
   fillGrid(
     list,
@@ -761,30 +863,48 @@ async function renderProfile() {
     '<div class="who"><div class="n">' + escapeHtml(name) + "</div>" +
     (d.user && d.user.username ? '<div class="u">@' + escapeHtml(d.user.username) + "</div>" : "") + "</div>";
 
-  const b = d.balance || { earned: 0, available: 0 };
+  const balance = typeof d.balance === "number" ? d.balance : 0;
+  const earnedTotal = d.earnedTotal || 0;
   balCard.className = "card stat";
   balCard.innerHTML =
-    '<div class="card-title">' + L("available") + "</div>" +
-    '<div class="big">$' + usd(Math.max(0, b.available)) + "</div>" +
-    '<div class="sub">' + L("totalEarned") + ": $" + usd(b.earned) + " · creator " + d.creatorShare + "%</div>";
+    '<div class="card-title">' + L("balanceTitle") + "</div>" +
+    '<div class="big">$' + usd(Math.max(0, balance)) + "</div>" +
+    '<div class="sub">' + L("totalEarned") + ": $" + usd(earnedTotal) + " · creator " + d.creatorShare + "%</div>";
+  // To'ldirish tugmasi
+  const tb = document.createElement("button");
+  tb.className = "primary";
+  tb.style.marginTop = "16px";
+  tb.textContent = "➕ " + L("topupBtn");
+  if (d.topupEnabled) tb.addEventListener("click", () => openTopup(0, null, null));
+  else tb.disabled = true;
+  balCard.appendChild(tb);
+  // Yechish tugmasi — faqat "pishgan" (withdrawable) summa
+  const withdrawable = typeof d.withdrawable === "number" ? d.withdrawable : balance;
   const wb = document.createElement("button");
   wb.className = "primary";
-  wb.style.marginTop = "16px";
-  const can = b.available >= d.minWithdraw && !!d.tonWallet && !!d.payoutEnabled;
+  wb.style.marginTop = "8px";
+  const can = withdrawable >= d.minWithdraw && !!d.tonWallet && !!d.payoutEnabled;
   if (can) {
-    wb.textContent = "💸 " + L("withdrawBtn") + " — $" + usd(b.available);
+    wb.textContent = "💸 " + L("withdrawBtn") + " — $" + usd(withdrawable);
     wb.addEventListener("click", () => withdraw(wb));
   } else {
     wb.textContent = "💸 " + L("withdrawBtn");
     wb.disabled = true;
   }
   balCard.appendChild(wb);
-  if (!can) {
+  const hint = !d.tonWallet
+    ? L("walletNeeded")
+    : withdrawable < d.minWithdraw
+      ? L("minWithdraw") + " $" + usd(d.minWithdraw) + (d.withdrawFee ? " · " + L("feeNote") + " $" + usd(d.withdrawFee) : "")
+      : balance - withdrawable > 0.01
+        ? L("heldNote") + " $" + usd(balance - withdrawable)
+        : "";
+  if (hint) {
     const h = document.createElement("div");
     h.className = "hint";
     h.style.textAlign = "left";
-    h.textContent = !d.tonWallet ? L("walletNeeded") : b.available < d.minWithdraw ? L("minWithdraw") + " $" + usd(d.minWithdraw) : "";
-    if (h.textContent) balCard.appendChild(h);
+    h.textContent = hint;
+    balCard.appendChild(h);
   }
 
   walletCard.innerHTML = '<div class="card-title">' + L("walletTitle") + "</div>";
