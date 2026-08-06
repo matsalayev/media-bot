@@ -4,7 +4,7 @@ import { config, assertBotConfig } from "./config";
 import { prisma } from "./db";
 import { s3Enabled, putReelToS3, publicUrlFor } from "./storage";
 import { t, normLang, Lang } from "./i18n";
-import { usdtToStars, fmtUsd } from "./pricing";
+import { usdtToStars, starsToUsdt, fmtUsd } from "./pricing";
 import {
   tronEnabled,
   isTrc20Address,
@@ -255,6 +255,69 @@ export async function sendUnlockedVideo(buyerTelegramId: string, contentId: numb
   return true;
 }
 
+// ==================== Telegram Stars to'lovi ====================
+
+function starsShare(priceStars: number): { creatorEarned: number; platformFee: number } {
+  const creatorEarned = Math.floor((priceStars * config.creatorSharePercent) / 100);
+  return { creatorEarned, platformFee: priceStars - creatorEarned };
+}
+
+/** Kontent uchun Telegram Stars invoice havolasini yaratadi (Mini App tg.openInvoice bilan ochadi). */
+export async function createStarsInvoice(
+  contentId: number,
+  _buyerTgId: string,
+): Promise<{ ok: boolean; link?: string; message?: string; stars?: number }> {
+  const content = await prisma.content.findFirst({ where: { id: contentId, status: "published" } });
+  if (!content) return { ok: false, message: "not found" };
+  if (!content.videoFileId) return { ok: false, message: "kontent to'liq video yo'q" };
+  const stars = content.priceStars || usdtToStars(content.priceUsdt);
+  if (stars <= 0) return { ok: false, message: "bepul" };
+  try {
+    const link = await bot.api.createInvoiceLink(
+      content.title.slice(0, 32) || "Video",
+      `🎬 ${content.title}`.slice(0, 255),
+      `buy:${content.id}`, // payload
+      "", // provider_token — Telegram Stars uchun bo'sh
+      "XTR", // currency = Telegram Stars
+      [{ label: content.title.slice(0, 32) || "Video", amount: stars }],
+    );
+    return { ok: true, link, stars };
+  } catch (e) {
+    return { ok: false, message: String((e as Error)?.message ?? e).slice(0, 150) };
+  }
+}
+
+/** Creator Stars balansi (jami ishlangan, band, mavjud). */
+export async function creatorStarsBalance(
+  userId: number,
+): Promise<{ earned: number; reserved: number; available: number }> {
+  const agg = await prisma.unlock.aggregate({ _sum: { creatorEarned: true }, where: { refunded: false, content: { creatorId: userId } } });
+  const earned = agg._sum.creatorEarned ?? 0;
+  const paid = await prisma.payout.aggregate({ _sum: { amountStars: true }, where: { userId, status: { in: ["requested", "processing", "paid"] } } });
+  const reserved = paid._sum.amountStars ?? 0;
+  return { earned, reserved, available: earned - reserved };
+}
+
+/** Stars yechish so'rovi — admin QO'LDA tarqatadi (Telegram'da botdan userga Stars yuborish API'si yo'q). */
+export async function requestStarsPayout(telegramId: string, lang?: string): Promise<{ ok: boolean; message: string }> {
+  const l = normLang(lang);
+  const u = await prisma.user.findUnique({ where: { telegramId } });
+  if (!u) return { ok: false, message: t(l, "startFirst") };
+  if (u.isBanned) return { ok: false, message: t(l, "banned") };
+  const pending = await prisma.payout.findFirst({ where: { userId: u.id, status: { in: ["requested", "processing"] } } });
+  if (pending) return { ok: false, message: t(l, "payoutPending") };
+  const b = await creatorStarsBalance(u.id);
+  if (b.available < config.minWithdrawStars)
+    return { ok: false, message: t(l, "withdrawMinStars", { min: config.minWithdrawStars, available: Math.max(0, b.available) }) };
+  const payout = await prisma.payout.create({ data: { userId: u.id, amountStars: b.available, status: "requested" } });
+  const kb = new InlineKeyboard().text("✅ To'landi", `spayout_ok:${payout.id}`).text("❌ Rad", `spayout_no:${payout.id}`);
+  await notifyAdmins(
+    `⭐ Stars yechish #${payout.id}\n@${u.username ?? u.telegramId}\n${b.available} ⭐ (~$${fmtUsd(starsToUsdt(b.available))})\n\nQo'lda tarqating (Fragment/karta), keyin «To'landi» bosing.`,
+    kb,
+  );
+  return { ok: true, message: t(l, "withdrawRequested", { amount: b.available }) };
+}
+
 /** Creatorning TON hamyon manzilini saqlaydi (payout USDT shu manzilga tushadi). */
 export async function setTonWallet(
   telegramId: string,
@@ -391,11 +454,44 @@ export async function createComplaint(
   return { ok: true, message: t(l, "complaintFiled"), complaintId: c.id };
 }
 
-/** Refundni bajaradi: xaridorga 90% BALANSGA qaytadi, creatordan clawback (10% komissiya qoladi). Off-chain, darhol. */
+/** Refundni bajaradi. Stars xaridi → Telegram Stars qaytariladi; USDT xaridi → balansga. Clawback creatordan. */
 export async function processRefund(complaintId: number): Promise<{ ok: boolean; message: string }> {
   const c = await prisma.complaint.findUnique({ where: { id: complaintId } });
   if (!c || c.status !== "pending") return { ok: false, message: "Shikoyat topilmadi yoki allaqachon ko'rib chiqilgan." };
   const content = await prisma.content.findUnique({ where: { id: c.contentId } });
+
+  // --- Stars xaridi: Telegram Stars refund (avtomatik) + clawback (unlock refunded) ---
+  const buyerU = await prisma.user.findUnique({ where: { telegramId: c.buyerTgId } });
+  const unlockU = buyerU
+    ? await prisma.unlock.findUnique({ where: { userId_contentId: { userId: buyerU.id, contentId: c.contentId } } })
+    : null;
+  if (unlockU && !unlockU.refunded && unlockU.source === "stars") {
+    if (unlockU.chargeId) {
+      try {
+        await bot.api.refundStarPayment(Number(c.buyerTgId), unlockU.chargeId);
+      } catch (e) {
+        return { ok: false, message: "Stars refund xatosi: " + String((e as Error)?.message ?? e).slice(0, 120) };
+      }
+    }
+    const done = await prisma.$transaction(async (tx) => {
+      const claim = await tx.complaint.updateMany({ where: { id: complaintId, status: "pending" }, data: { status: "approved" } });
+      if (claim.count !== 1) return false;
+      await tx.unlock.updateMany({ where: { id: unlockU.id, refunded: false }, data: { refunded: true } });
+      await tx.content.update({ where: { id: c.contentId }, data: { status: "rejected", rejectionReason: "Aldov shikoyati tasdiqlandi" } });
+      return true;
+    });
+    if (!done) return { ok: false, message: "Allaqachon ko'rib chiqilgan." };
+    if (content?.creatorId) await strikeCreator(content.creatorId, `aldov refund (stars) #${complaintId}`);
+    const stars = unlockU.starsPaid || 0;
+    await bot.api.sendMessage(c.buyerTgId, t(normLang(buyerU?.lang), "refundBuyerStars", { title: content?.title ?? "", amount: stars })).catch(() => {});
+    if (content?.creatorId) {
+      const creator = await prisma.user.findUnique({ where: { id: content.creatorId } });
+      if (creator) await bot.api.sendMessage(creator.telegramId, t(normLang(creator.lang), "refundClawbackStars", { title: content?.title ?? "", amount: unlockU.creatorEarned })).catch(() => {});
+    }
+    return { ok: true, message: `✅ Refund #${complaintId}: ${stars} ⭐ xaridorga qaytarildi.` };
+  }
+
+  // --- USDT (TRON) xaridi: off-chain balans (eski oqim) ---
   const res = await processFraudRefund(c.contentId, c.buyerTgId, complaintId);
   if (res.status !== "ok") return { ok: false, message: "Qaytarib bo'lmadi (unlock yo'q yoki allaqachon qaytarilgan)." };
 
@@ -644,17 +740,14 @@ bot.command("earnings", async (ctx) => {
   const lang = await userLang(String(ctx.from.id));
   const creator = await prisma.user.findUnique({ where: { telegramId: String(ctx.from.id) } });
   if (!creator) return ctx.reply(t(lang, "startFirst"));
-  const balance = await userBalance(creator.id);
-  const earned = await lifetimeEarned(creator.id);
+  const b = await creatorStarsBalance(creator.id);
   await ctx.reply(
-    t(lang, "earnings", {
-      earned: fmtUsd(earned),
-      reserved: fmtUsd(0),
-      available: fmtUsd(Math.max(0, balance)),
-      min: fmtUsd(config.minWithdrawUsdt),
+    t(lang, "earningsStars", {
+      earned: b.earned,
+      available: Math.max(0, b.available),
+      min: config.minWithdrawStars,
       share: config.creatorSharePercent,
       plat: 100 - config.creatorSharePercent,
-      wallet: creator.tonWallet ?? "—",
     }),
   );
 });
@@ -675,7 +768,7 @@ bot.command("wallet", async (ctx) => {
 bot.command("withdraw", async (ctx) => {
   if (!ctx.from) return;
   const lang = await userLang(String(ctx.from.id));
-  const res = await requestPayout(String(ctx.from.id), lang);
+  const res = await requestStarsPayout(String(ctx.from.id), lang);
   await ctx.reply(res.message);
 });
 
@@ -908,6 +1001,58 @@ bot.command("balance", async (ctx) => {
 });
 
 // To'lov — balansdan (off-chain); to'ldirish USDT-TRC20 orqali (watcher tanib oladi).
+
+// ---------------- Telegram Stars to'lov handlerlari ----------------
+bot.on("pre_checkout_query", async (ctx) => {
+  await ctx.answerPreCheckoutQuery(true).catch(() => {});
+});
+
+bot.on("message:successful_payment", async (ctx) => {
+  const sp = ctx.message.successful_payment;
+  const m = /^buy:(\d+)$/.exec(sp.invoice_payload || "");
+  if (!m || !ctx.from) return;
+  const contentId = Number(m[1]);
+  const content = await prisma.content.findUnique({ where: { id: contentId } });
+  if (!content || !content.videoFileId) return;
+  const user = await prisma.user.findUnique({ where: { telegramId: String(ctx.from.id) } });
+  if (!user) return;
+  const stars = sp.total_amount;
+  const { creatorEarned, platformFee } = starsShare(stars);
+  await recordUnlock(user.id, contentId, {
+    source: "stars",
+    starsPaid: stars,
+    creatorEarned,
+    platformFee,
+    chargeId: sp.telegram_payment_charge_id,
+  });
+  try {
+    await bot.api.sendVideo(String(ctx.from.id), content.videoFileId, {
+      caption: `🎬 ${content.title}`,
+      supports_streaming: true,
+      reply_markup: new InlineKeyboard().text(t(normLang(user.lang), "complaintBtn"), `complain:${contentId}`),
+    });
+  } catch (e) {
+    if (!isCantDeliver(e)) console.error("Stars yetkazish xatosi:", e);
+  }
+});
+
+// Admin: Stars yechish so'rovini qo'lda tasdiqlash (tashqi tarqatgach)
+bot.callbackQuery(/^spayout_ok:(\d+)$/, async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
+  const id = Number(ctx.match[1]);
+  await prisma.payout.updateMany({ where: { id, status: { in: ["requested", "processing"] } }, data: { status: "paid" } });
+  const p = await prisma.payout.findUnique({ where: { id }, include: { user: true } });
+  if (p) await bot.api.sendMessage(p.user.telegramId, `✅ ${p.amountStars} ⭐ hisobingizga tarqatildi.`).catch(() => {});
+  await ctx.answerCallbackQuery("✅ To'landi");
+  await ctx.editMessageReplyMarkup().catch(() => {});
+});
+bot.callbackQuery(/^spayout_no:(\d+)$/, async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
+  const id = Number(ctx.match[1]);
+  await prisma.payout.updateMany({ where: { id, status: { in: ["requested", "processing"] } }, data: { status: "rejected" } });
+  await ctx.answerCallbackQuery("Rad etildi");
+  await ctx.editMessageReplyMarkup().catch(() => {});
+});
 
 // Bot kanal/guruxga admin qilinganda — storage kanal ID'sini adminlarga yuboradi
 bot.on("my_chat_member", async (ctx) => {

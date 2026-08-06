@@ -18,9 +18,9 @@ const S: Record<string, Entry> = {
     en: "✅ Language set.",
   },
   welcome: {
-    uz: "🎬 Media'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini oching — to'liq video shu chatga keladi. To'lov ichki USDT balansingizdan yechiladi; balansni USDT-TRC20 (TRON) bilan to'ldirasiz.\n\n💡 O'z videongizni joylab, har sotuvdan 90% ishlang: /upload",
-    ru: "🎬 Добро пожаловать в Media!\n\nСмотрите короткие видео, понравившееся открывайте — полное видео придёт в этот чат. Оплата списывается с внутреннего USDT баланса; баланс пополняете через USDT-TRC20 (TRON).\n\n💡 Публикуйте свои видео и зарабатывайте 90% с продажи: /upload",
-    en: "🎬 Welcome to Media!\n\nWatch short videos and unlock the ones you like — the full video is sent to this chat. Payment is taken from your internal USDT balance, which you top up via USDT-TRC20 (TRON).\n\n💡 Post your own videos and earn 90% per sale: /upload",
+    uz: "🎬 Media'ga xush kelibsiz!\n\nQisqa videolarni ko'ring, yoqqanini Telegram Stars ⭐ bilan oching — to'liq video shu chatga keladi.\n\n💡 O'z videongizni joylab, har sotuvdan 90% ishlang: /upload",
+    ru: "🎬 Добро пожаловать в Media!\n\nСмотрите короткие видео, понравившееся открывайте за Telegram Stars ⭐ — полное видео придёт в этот чат.\n\n💡 Публикуйте свои видео и зарабатывайте 90% с продажи: /upload",
+    en: "🎬 Welcome to Media!\n\nWatch short videos and unlock the ones you like with Telegram Stars ⭐ — the full video is sent to this chat.\n\n💡 Post your own videos and earn 90% per sale: /upload",
   },
   openApp: { uz: "🎬 Ochish", ru: "🎬 Открыть", en: "🎬 Open" },
   help: {
@@ -80,6 +80,11 @@ const S: Record<string, Entry> = {
     uz: "💰 Daromadingiz\n\nJami ishlangan: {earned} USDT\nYechilgan/jarayonda: {reserved} USDT\nMavjud: {available} USDT\n\nTON hamyon: {wallet}\nUlush: siz {share}%, platforma {plat}%\n\nYechish: /withdraw (min {min} USDT)\nHamyonni ulash: /wallet <manzil>",
     ru: "💰 Ваш доход\n\nВсего заработано: {earned} USDT\nВыведено/в процессе: {reserved} USDT\nДоступно: {available} USDT\n\nTON кошелёк: {wallet}\nДоля: вы {share}%, платформа {plat}%\n\nВывод: /withdraw (мин {min} USDT)\nПривязать кошелёк: /wallet <адрес>",
     en: "💰 Your earnings\n\nTotal earned: {earned} USDT\nWithdrawn/in progress: {reserved} USDT\nAvailable: {available} USDT\n\nTON wallet: {wallet}\nShare: you {share}%, platform {plat}%\n\nWithdraw: /withdraw (min {min} USDT)\nLink wallet: /wallet <address>",
+  },
+  earningsStars: {
+    uz: "💰 Daromadingiz\n\nJami ishlangan: {earned} ⭐\nMavjud (yechish uchun): {available} ⭐\nUlush: siz {share}%, platforma {plat}%\n\nYechish: /withdraw (min {min} ⭐)\nⓘ Yechilgan Stars admin tomonidan qo'lda tarqatiladi.",
+    ru: "💰 Ваш доход\n\nВсего заработано: {earned} ⭐\nДоступно (для вывода): {available} ⭐\nДоля: вы {share}%, платформа {plat}%\n\nВывод: /withdraw (мин {min} ⭐)\nⓘ Выведенные Stars распределяет админ вручную.",
+    en: "💰 Your earnings\n\nTotal earned: {earned} ⭐\nAvailable (to withdraw): {available} ⭐\nShare: you {share}%, platform {plat}%\n\nWithdraw: /withdraw (min {min} ⭐)\nⓘ Withdrawn Stars are distributed manually by the admin.",
   },
   withdrawMin: {
     uz: "Yechish uchun kamida {min} USDT kerak. Mavjud: {available} USDT",
@@ -142,9 +147,9 @@ const S: Record<string, Entry> = {
     en: "❌ Withdrawal failed. The admin has been notified.",
   },
   terms: {
-    uz: "📄 Foydalanish shartlari\n\n1. Media — kontent almashish platformasi. Pullik kontent ichki USDT balansdan sotib olinadi; balans USDT-TRC20 (TRON tarmog'i) bilan to'ldiriladi.\n\n2. To'ldirish blokcheynda amalga oshadi. Sotib olingan kontent uchun to'lov qaytarilmaydi — quyidagi aldov holatidan tashqari.\n\n3. 🛡 Aldov himoyasi: agar qisqa reel to'liq videoga mos kelmasa (aldov), «⚠️ Shikoyat» tugmasi orqali murojaat qilishingiz mumkin. Admin tekshiradi; tasdiqlansa to'lovingizning 90% qaytariladi (10% tizim komissiyasi qaytarilmaydi).\n\n4. Mualliflar har sotuvdan 90% oladi, platforma 10% komissiya oladi.\n\n5. Kontent uchun javobgarlik uni joylagan muallifda. Noqonuniy yoki aldov kontent taqiqlanadi.\n\n6. Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
-    ru: "📄 Условия использования\n\n1. Media — платформа обмена контентом. Платный контент покупается с внутреннего USDT баланса; баланс пополняется через USDT-TRC20 (сеть TRON).\n\n2. Пополнение проходит в блокчейне. Оплата за купленный контент не возвращается — кроме случая обмана ниже.\n\n3. 🛡 Защита от обмана: если короткий reel не соответствует полному видео (обман), вы можете подать «⚠️ Жалобу». Админ проверит; при подтверждении вернётся 90% оплаты (10% комиссии не возвращается).\n\n4. Авторы получают 90% с каждой продажи, платформа — 10% комиссии.\n\n5. Ответственность за контент несёт автор. Незаконный или мошеннический контент запрещён.\n\n6. Безопасность вашего кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
-    en: "📄 Terms of Use\n\n1. Media is a content-sharing platform. Paid content is purchased from your internal USDT balance, topped up via USDT-TRC20 (TRON network).\n\n2. Top-ups settle on-chain. Payment for purchased content is non-refundable — except for the bait case below.\n\n3. 🛡 Fraud protection: if a short reel does not match the full video (bait), you may file a «⚠️ Complaint». The admin reviews it; if approved, 90% of your payment is refunded (the 10% platform commission is non-refundable).\n\n4. Creators earn 90% of each sale; the platform takes a 10% commission.\n\n5. Creators are responsible for their content. Illegal or fraudulent content is prohibited.\n\n6. The security of your wallet and keys is your own responsibility.\n\nTo continue, please accept the terms.",
+    uz: "📄 Foydalanish shartlari\n\n1. Media — kontent almashish platformasi. Pullik kontent Telegram Stars ⭐ orqali sotib olinadi.\n\n2. Sotib olingan kontent uchun to'lov qaytarilmaydi — quyidagi aldov holatidan tashqari.\n\n3. 🛡 Aldov himoyasi: agar qisqa reel to'liq videoga mos kelmasa (aldov), «⚠️ Shikoyat» tugmasi orqali murojaat qilishingiz mumkin. Admin tekshiradi; tasdiqlansa to'lovingizning 90% qaytariladi (10% tizim komissiyasi qaytarilmaydi).\n\n4. Mualliflar har sotuvdan 90% oladi, platforma 10% komissiya oladi.\n\n5. Kontent uchun javobgarlik uni joylagan muallifda. Noqonuniy yoki aldov kontent taqiqlanadi.\n\n6. Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
+    ru: "📄 Условия использования\n\n1. Media — платформа обмена контентом. Платный контент покупается за Telegram Stars ⭐.\n\n2. Оплата за купленный контент не возвращается — кроме случая обмана ниже.\n\n3. 🛡 Защита от обмана: если короткий reel не соответствует полному видео (обман), вы можете подать «⚠️ Жалобу». Админ проверит; при подтверждении вернётся 90% оплаты (10% комиссии не возвращается).\n\n4. Авторы получают 90% с каждой продажи, платформа — 10% комиссии.\n\n5. Ответственность за контент несёт автор. Незаконный или мошеннический контент запрещён.\n\n6. Безопасность вашего кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
+    en: "📄 Terms of Use\n\n1. Media is a content-sharing platform. Paid content is purchased with Telegram Stars ⭐.\n\n2. Payment for purchased content is non-refundable — except for the bait case below.\n\n3. 🛡 Fraud protection: if a short reel does not match the full video (bait), you may file a «⚠️ Complaint». The admin reviews it; if approved, 90% of your payment is refunded (the 10% platform commission is non-refundable).\n\n4. Creators earn 90% of each sale; the platform takes a 10% commission.\n\n5. Creators are responsible for their content. Illegal or fraudulent content is prohibited.\n\n6. The security of your wallet and keys is your own responsibility.\n\nTo continue, please accept the terms.",
   },
   termsAgree: { uz: "✅ Roziman", ru: "✅ Принимаю", en: "✅ I agree" },
   termsAccepted: {
@@ -186,6 +191,26 @@ const S: Record<string, Entry> = {
     uz: "⚠️ «{title}» uchun aldov shikoyati tasdiqlandi. {amount} USDT balansingizdan qaytarib olindi.",
     ru: "⚠️ Жалоба на обман по «{title}» подтверждена. {amount} USDT списано с вашего баланса.",
     en: "⚠️ A bait complaint for «{title}» was approved. {amount} USDT was clawed back from your balance.",
+  },
+  withdrawMinStars: {
+    uz: "Yechish uchun kamida {min} ⭐ kerak (sizda {available} ⭐).",
+    ru: "Для вывода нужно минимум {min} ⭐ (у вас {available} ⭐).",
+    en: "Minimum to withdraw is {min} ⭐ (you have {available} ⭐).",
+  },
+  withdrawRequested: {
+    uz: "⏳ Yechish so'rovi yuborildi: {amount} ⭐. Admin tez orada hisobingizga tarqatadi.",
+    ru: "⏳ Запрос на вывод отправлен: {amount} ⭐. Админ скоро распределит на ваш счёт.",
+    en: "⏳ Withdrawal requested: {amount} ⭐. The admin will distribute it to you shortly.",
+  },
+  refundBuyerStars: {
+    uz: "✅ «{title}» bo'yicha shikoyatingiz tasdiqlandi. {amount} ⭐ hisobingizga qaytarildi.",
+    ru: "✅ Ваша жалоба по «{title}» подтверждена. {amount} ⭐ возвращено на ваш счёт.",
+    en: "✅ Your complaint about «{title}» was approved. {amount} ⭐ was refunded to you.",
+  },
+  refundClawbackStars: {
+    uz: "⚠️ «{title}» uchun aldov tasdiqlandi. {amount} ⭐ daromadingizdan olib tashlandi.",
+    ru: "⚠️ Обман по «{title}» подтверждён. {amount} ⭐ снято с вашего дохода.",
+    en: "⚠️ Bait for «{title}» was confirmed. {amount} ⭐ was removed from your earnings.",
   },
   banned: {
     uz: "⛔ Hisobingiz qoidabuzarlik uchun bloklangan. Yuklash, sotib olish va yechish mumkin emas.",

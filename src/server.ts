@@ -9,10 +9,7 @@ import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
-import { bot, deliverContent, sendUnlockedVideo, requestPayout, createContent, setTonWallet, createComplaint, createReport, assertCanUpload, userBalance } from "./bot";
-import { tronEnabled, hotWalletAddress } from "./tron";
-import { purchaseFromBalance, createTopup, withdrawableBalance } from "./ledger";
-import { checkDepositsNow } from "./watcher";
+import { bot, deliverContent, sendUnlockedVideo, createContent, createComplaint, createReport, assertCanUpload, createStarsInvoice, creatorStarsBalance, requestStarsPayout } from "./bot";
 import { usdtToStars } from "./pricing";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
@@ -135,7 +132,7 @@ export function buildServer() {
     return { status: "needpay", priceUsdt: content.priceUsdt }; // pullik yoki refund qilingan → balansdan (/api/buy)
   });
 
-  // ---- Sotib olish — ichki USDT balansdan (off-chain, darhol, bepul) ----
+  // ---- Sotib olish — Telegram Stars invoice (Mini App tg.openInvoice bilan ochadi) ----
   app.post("/api/buy", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
@@ -151,61 +148,16 @@ export function buildServer() {
     if (user.isBanned) return reply.code(403).send({ error: "banned", banned: true });
     if (!user.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
 
-    const res = await purchaseFromBalance(user.id, content);
-    if (res.status === "insufficient") {
-      return {
-        status: "needtopup",
-        priceUsdt: content.priceUsdt,
-        balance: res.balance,
-        shortfall: Math.max(0, Math.round((res.price - res.balance) * 1e6) / 1e6),
-      };
+    // Egasi yoki allaqachon ochilgan → bepul yetkazamiz
+    const already = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+    if (content.creatorId === user.id || (already && !already.refunded)) {
+      await sendUnlockedVideo(tg.id, contentId).catch(() => {});
+      return { status: "delivered" };
     }
-    // ok yoki already → videoni yetkazamiz
-    await sendUnlockedVideo(tg.id, contentId).catch(() => {});
-    return { status: "delivered" };
-  });
 
-  // ---- Balansni to'ldirish so'rovi — noyob summa + hot-wallet manzili ----
-  app.post("/api/topup", async (req, reply) => {
-    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
-    if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    if (!tronEnabled()) return reply.code(503).send({ error: "to'ldirish vaqtincha ishlamayapti" });
-    const user = await getUser(tg);
-    if (user.isBanned) return reply.code(403).send({ error: "banned", banned: true });
-    if (!user.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
-    const amount = Math.max(1, Math.min(10000, Number((req.body as { amount?: number })?.amount) || 0));
-    if (!(amount >= 1)) return reply.code(400).send({ error: "summa noto'g'ri (min $1)" });
-    // Ochiq to'ldirishlar cheklovi (spam/DoS + offset fazosini tugatishning oldini oladi)
-    const pendingCount = await prisma.deposit.count({ where: { userId: user.id, status: "pending" } });
-    if (pendingCount >= 6) return reply.code(429).send({ error: "Ochiq to'ldirishlaringiz ko'p — avvalgilarini yakunlang yoki kuting." });
-    try {
-      const dep = await createTopup(user.id, amount);
-      return {
-        status: "ok",
-        depositId: dep.id,
-        address: dep.address,
-        amountUsdt: dep.expectedAmount, // AYNAN shu summani yuborish kerak (moslash uchun)
-        network: "TRC20",
-        ttlMin: config.depositTtlMin,
-      };
-    } catch (e) {
-      return reply.code(500).send({ error: "to'ldirish so'rovini yaratib bo'lmadi" });
-    }
-  });
-
-  // ---- To'ldirish holati (deposit bo'yicha) — tez javob uchun watcher'ni ham chaqiradi ----
-  app.post("/api/topup/status", async (req, reply) => {
-    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
-    if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    const depositId = Number((req.body as { depositId?: number })?.depositId);
-    if (!depositId) return reply.code(400).send({ error: "depositId required" });
-    const user = await prisma.user.findUnique({ where: { telegramId: tg.id } });
-    const dep = await prisma.deposit.findUnique({ where: { id: depositId } });
-    if (!dep || !user || dep.userId !== user.id) return reply.code(404).send({ error: "not found" });
-    if (dep.status === "pending") await checkDepositsNow().catch(() => {});
-    const fresh = await prisma.deposit.findUnique({ where: { id: depositId } });
-    const bal = await userBalance(user.id);
-    return { status: fresh?.status ?? dep.status, balance: bal };
+    const inv = await createStarsInvoice(contentId, tg.id);
+    if (!inv.ok || !inv.link) return reply.code(500).send({ error: inv.message || "invoice yaratilmadi" });
+    return { status: "invoice", link: inv.link, stars: inv.stars };
   });
 
   // ---- Like (toggle) ----
@@ -293,11 +245,7 @@ export function buildServer() {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const user = await getUser(tg);
-    const bal = await userBalance(user.id);
-    const earnedAgg = await prisma.unlock.aggregate({
-      _sum: { creatorEarnedUsdt: true },
-      where: { refunded: false, content: { creatorId: user.id } },
-    });
+    const sbal = await creatorStarsBalance(user.id);
     const list = await prisma.content.findMany({
       where: { creatorId: user.id, status: { not: "removed" } },
       orderBy: { id: "desc" },
@@ -305,11 +253,10 @@ export function buildServer() {
     });
     const earned = await prisma.unlock.groupBy({
       by: ["contentId"],
-      _sum: { creatorEarnedUsdt: true },
+      _sum: { creatorEarned: true },
       where: { refunded: false, content: { creatorId: user.id } },
     });
-    const withdrawable = await withdrawableBalance(user.id);
-    const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarnedUsdt ?? 0]));
+    const em = new Map(earned.map((e) => [e.contentId, e._sum.creatorEarned ?? 0]));
     const savedRows = await prisma.savedItem.findMany({
       where: { userId: user.id, content: { status: "published" } },
       include: { content: true },
@@ -325,16 +272,13 @@ export function buildServer() {
     return {
       lang: normLang(user.lang),
       user: { firstName: user.firstName, username: user.username },
-      balance: bal,
-      withdrawable,
-      earnedTotal: earnedAgg._sum.creatorEarnedUsdt ?? 0,
-      minWithdraw: config.minWithdrawUsdt,
-      withdrawFee: config.withdrawFeeUsdt,
+      paymentMode: "stars",
+      balanceStars: Math.max(0, sbal.available),
+      earnedStars: sbal.earned,
+      minWithdrawStars: config.minWithdrawStars,
+      starUsd: config.starUsd,
       creatorShare: config.creatorSharePercent,
-      tonWallet: user.tonWallet ?? "",
-      payoutEnabled: tronEnabled(),
-      topupEnabled: tronEnabled(),
-      topupAmounts: config.topupAmounts,
+      payoutEnabled: true,
       content: await Promise.all(
         list.map(async (c) => ({
           id: c.id,
@@ -409,23 +353,13 @@ export function buildServer() {
     return { ok: true, lang };
   });
 
-  // ---- TON hamyon manzilini saqlash ----
-  app.post("/api/wallet", async (req, reply) => {
-    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
-    if (!tg) return reply.code(401).send({ error: "unauthorized" });
-    const address = String((req.body as { address?: string })?.address ?? "").trim();
-    if (!address) return reply.code(400).send({ error: "address required" });
-    const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
-    return setTonWallet(tg.id, address, u?.lang ?? undefined);
-  });
-
-  // ---- Payout (avtomatik USDT → TON hamyon) ----
+  // ---- Yechish so'rovi (Stars) — admin qo'lda tarqatadi ----
   app.post("/api/withdraw", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
     if (!u?.acceptedTerms) return reply.code(403).send({ error: "terms", needTerms: true });
-    return requestPayout(tg.id, u?.lang ?? undefined);
+    return requestStarsPayout(tg.id, u?.lang ?? undefined);
   });
 
   // ---- Video yuklash (Mini App, multipart) ----

@@ -28,11 +28,12 @@ async function main() {
     )
     .catch((e) => console.warn("deposit_pending_amount index:", (e as Error).message));
 
-  // TRON to'lov holati
-  if (tronEnabled()) {
-    console.log(`💳 Native TRON to'lov yoqilgan. Hot-wallet: ${hotWalletAddress()}`);
+  // To'lov rejimi
+  if (config.paymentMode === "tron") {
+    if (tronEnabled()) console.log(`💳 Native TRON to'lov yoqilgan. Hot-wallet: ${hotWalletAddress()}`);
+    else console.log("💤 TRON hot-wallet sozlanmagan — to'lov/yechish o'chiq (.env: TRON_HOTWALLET_*).");
   } else {
-    console.log("💤 TRON hot-wallet sozlanmagan — to'lov/yechish o'chiq (.env: TRON_HOTWALLET_*).");
+    console.log("⭐ To'lov rejimi: Telegram Stars.");
   }
 
   // 1) Bot ma'lumotini oldindan yuklash (share-link'lar uchun botInfo.username kerak)
@@ -89,8 +90,8 @@ async function main() {
     console.warn("Buyruqlar menyusini o'rnatib bo'lmadi:", e);
   }
 
-  // 2c) USDT (TON Connect) to'lov kuzatuvchisi
-  startPaymentWatcher();
+  // 2c) To'lov kuzatuvchisi — faqat TRON rejimida (Stars'da kerak emas)
+  if (config.paymentMode === "tron") startPaymentWatcher();
 
   // 3) Botni ishga tushirish (long polling)
   await bot.start({

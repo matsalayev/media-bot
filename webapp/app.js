@@ -35,9 +35,9 @@ const UI = {
     views: "ko'rish", sales: "sotildi", videosN: "video", earnedShort: "ishlangan", price: "Narx",
     reportBtn: "Aldov — shikoyat qilish", reportAsk: "Bu reel to'liq videoga mos kelmadimi? Aldov shikoyati yuborilsinmi?",
     termsTitle: "Foydalanish shartlari", termsAgree: "✅ Roziman",
-    termsText: "Media — kontent platformasi. Pullik kontent ichki USDT balansdan sotib olinadi; balans USDT-TRC20 (TRON) bilan to'ldiriladi.\n\n• Sotib olingan kontent uchun to'lov qaytarilmaydi — aldov holatidan tashqari.\n• 🛡 Aldov himoyasi: qisqa reel to'liq videoga mos kelmasa, «⚠️ Shikoyat» qiling. Admin tasdiqlasa, to'lovingizning 90% qaytariladi (10% komissiya qaytmaydi).\n• Mualliflar har sotuvdan 90%, platforma 10% oladi.\n• Kontent uchun javobgarlik uni joylagan muallifda.\n• Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
+    termsText: "Media — kontent platformasi. Pullik kontent Telegram Stars ⭐ orqali sotib olinadi.\n\n• Sotib olingan kontent uchun to'lov qaytarilmaydi — aldov holatidan tashqari.\n• 🛡 Aldov himoyasi: qisqa reel to'liq videoga mos kelmasa, «⚠️ Shikoyat» qiling. Admin tasdiqlasa, to'lovingizning 90% qaytariladi (10% komissiya qaytmaydi).\n• Mualliflar har sotuvdan 90%, platforma 10% oladi.\n• Kontent uchun javobgarlik uni joylagan muallifda.\n• Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
     reportTitle: "Shikoyat qilish", reportThanks: "✅ Shikoyat yuborildi", catIllegal: "🚫 Noqonuniy kontent", catSexual: "🔞 Jinsiy / voyaga yetmagan", catCopyright: "©️ Mualliflik huquqi", catViolence: "⚔️ Zo'ravonlik", catOther: "• Boshqa sabab",
-    topupTitle: "Balansni to'ldirish", topupBtn: "To'ldirish", balanceTitle: "Balansingiz", close: "Yopish", copied: "📋 Nusxalandi", feeNote: "tarmoq haqi", payoutSoon: "⚙️ Hozircha o'chiq, keyinroq urinib ko'ring", heldNote: "⏳ Pishmoqda (nizolar oynasi):",
+    topupTitle: "Balansni to'ldirish", topupBtn: "To'ldirish", balanceTitle: "Balansingiz", close: "Yopish", copied: "📋 Nusxalandi", feeNote: "tarmoq haqi", payoutSoon: "⚙️ Hozircha o'chiq, keyinroq urinib ko'ring", heldNote: "⏳ Pishmoqda (nizolar oynasi):", withdrawNote: "Yechish so'rovi adminga boradi va qo'lda tarqatiladi.",
     topupPick: "To'ldirish summasini tanlang (USDT):", topupNeed: "Bu video uchun kamida", topupSendExact: "AYNAN shu summani yuboring (USDT-TRC20):", topupAddress: "Manzil (TRON / TRC20):", topupWaiting: "To'lov kutilmoqda…", topupDone: "Balans to'ldirildi!", topupExpired: "Muddati o'tdi — qayta urinib ko'ring", topupNote: "⚠️ Faqat TRON (TRC20) tarmog'ida, AYNAN yuqoridagi summada yuboring. 1–2 daqiqada tushadi.",
   },
   ru: {
@@ -61,9 +61,9 @@ const UI = {
     views: "просм.", sales: "продано", videosN: "видео", earnedShort: "заработано", price: "Цена",
     reportBtn: "Обман — пожаловаться", reportAsk: "Этот reel не соответствует полному видео? Отправить жалобу на обман?",
     termsTitle: "Условия использования", termsAgree: "✅ Принимаю",
-    termsText: "Media — платформа контента. Платный контент покупается с внутреннего USDT баланса; баланс пополняется через USDT-TRC20 (TRON).\n\n• Оплата за купленный контент не возвращается — кроме случая обмана.\n• 🛡 Защита от обмана: если короткий reel не соответствует полному видео, подайте «⚠️ Жалобу». При подтверждении вернётся 90% (10% комиссии не возвращается).\n• Авторы получают 90% с продажи, платформа — 10%.\n• Ответственность за контент несёт автор.\n• Безопасность кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
+    termsText: "Media — платформа контента. Платный контент покупается за Telegram Stars ⭐.\n\n• Оплата за купленный контент не возвращается — кроме случая обмана.\n• 🛡 Защита от обмана: если короткий reel не соответствует полному видео, подайте «⚠️ Жалобу». При подтверждении вернётся 90% (10% комиссии не возвращается).\n• Авторы получают 90% с продажи, платформа — 10%.\n• Ответственность за контент несёт автор.\n• Безопасность кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
     reportTitle: "Пожаловаться", reportThanks: "✅ Жалоба отправлена", catIllegal: "🚫 Незаконный контент", catSexual: "🔞 Секс / несовершеннолетние", catCopyright: "©️ Авторские права", catViolence: "⚔️ Насилие", catOther: "• Другое",
-    topupTitle: "Пополнить баланс", topupBtn: "Пополнить", balanceTitle: "Ваш баланс", close: "Закрыть", copied: "📋 Скопировано", feeNote: "сетевая комиссия", payoutSoon: "⚙️ Пока отключено, попробуйте позже", heldNote: "⏳ Созревает (окно споров):",
+    topupTitle: "Пополнить баланс", topupBtn: "Пополнить", balanceTitle: "Ваш баланс", close: "Закрыть", copied: "📋 Скопировано", feeNote: "сетевая комиссия", payoutSoon: "⚙️ Пока отключено, попробуйте позже", heldNote: "⏳ Созревает (окно споров):", withdrawNote: "Запрос на вывод уходит админу и распределяется вручную.",
     topupPick: "Выберите сумму пополнения (USDT):", topupNeed: "Для этого видео минимум", topupSendExact: "Отправьте ТОЧНО эту сумму (USDT-TRC20):", topupAddress: "Адрес (TRON / TRC20):", topupWaiting: "Ожидаем оплату…", topupDone: "Баланс пополнен!", topupExpired: "Срок истёк — попробуйте снова", topupNote: "⚠️ Только сеть TRON (TRC20), ТОЧНО указанной суммой. Зачислится за 1–2 минуты.",
   },
   en: {
@@ -87,9 +87,9 @@ const UI = {
     views: "views", sales: "sales", videosN: "videos", earnedShort: "earned", price: "Price",
     reportBtn: "Report bait", reportAsk: "Doesn't this reel match the full video? Send a bait complaint?",
     termsTitle: "Terms of Use", termsAgree: "✅ I agree",
-    termsText: "Media is a content platform. Paid content is purchased from your internal USDT balance, topped up via USDT-TRC20 (TRON).\n\n• Payment for purchased content is non-refundable — except in cases of bait.\n• 🛡 Fraud protection: if a short reel doesn't match the full video, file a «⚠️ Complaint». If approved, 90% is refunded (the 10% commission is non-refundable).\n• Creators earn 90% per sale, the platform takes 10%.\n• Creators are responsible for their content.\n• The security of your wallet and keys is your own responsibility.\n\nAccept the terms to continue.",
+    termsText: "Media is a content platform. Paid content is purchased with Telegram Stars ⭐.\n\n• Payment for purchased content is non-refundable — except in cases of bait.\n• 🛡 Fraud protection: if a short reel doesn't match the full video, file a «⚠️ Complaint». If approved, 90% is refunded (the 10% commission is non-refundable).\n• Creators earn 90% per sale, the platform takes 10%.\n• Creators are responsible for their content.\n• The security of your wallet and keys is your own responsibility.\n\nAccept the terms to continue.",
     reportTitle: "Report", reportThanks: "✅ Report sent", catIllegal: "🚫 Illegal content", catSexual: "🔞 Sexual / minors", catCopyright: "©️ Copyright", catViolence: "⚔️ Violence", catOther: "• Other",
-    topupTitle: "Top up balance", topupBtn: "Top up", balanceTitle: "Your balance", close: "Close", copied: "📋 Copied", feeNote: "network fee", payoutSoon: "⚙️ Off for now, try again later", heldNote: "⏳ Maturing (dispute window):",
+    topupTitle: "Top up balance", topupBtn: "Top up", balanceTitle: "Your balance", close: "Close", copied: "📋 Copied", feeNote: "network fee", payoutSoon: "⚙️ Off for now, try again later", heldNote: "⏳ Maturing (dispute window):", withdrawNote: "Withdrawal request goes to the admin and is distributed manually.",
     topupPick: "Choose a top-up amount (USDT):", topupNeed: "For this video at least", topupSendExact: "Send EXACTLY this amount (USDT-TRC20):", topupAddress: "Address (TRON / TRC20):", topupWaiting: "Waiting for payment…", topupDone: "Balance topped up!", topupExpired: "Expired — please try again", topupNote: "⚠️ Only TRON (TRC20) network, EXACTLY the amount above. Credited in 1–2 minutes.",
   },
 };
@@ -374,7 +374,7 @@ async function deliverFree(it, btn) {
     btn.disabled = false;
   }
 }
-// Ichki USDT balansdan sotib olamiz (darhol, bepul). Yetmasa — to'ldirish oynasi.
+// Telegram Stars bilan sotib olamiz — invoice ochiladi, to'lovdan keyin video chatga keladi.
 async function buyCrypto(it, btn) {
   btn.disabled = true;
   try {
@@ -392,13 +392,20 @@ async function buyCrypto(it, btn) {
       it.unlocked = true;
       btn.textContent = watchLabel(it);
       btn.disabled = false;
-      meCache = null; // balans o'zgardi
       toast(L("sentToChat"));
       return;
     }
-    if (d.status === "needtopup") {
-      btn.disabled = false;
-      openTopup(d.shortfall || d.priceUsdt, it, btn);
+    if (d.status === "invoice" && d.link && tg && tg.openInvoice) {
+      tg.openInvoice(d.link, (status) => {
+        if (status === "paid") {
+          it.unlocked = true;
+          btn.textContent = watchLabel(it);
+          toast(L("sentToChatHint"));
+        } else if (status === "failed") {
+          toast(L("paymentFailed"));
+        }
+        btn.disabled = false;
+      });
       return;
     }
     toast(d.error || L("errGeneric"));
@@ -761,24 +768,24 @@ async function renderEarning() {
   } catch (e) {
     return void (card.innerHTML = '<div class="card-title">' + L("connErr") + "</div>");
   }
-  const balance = typeof d.balance === "number" ? d.balance : 0;
-  const earnedTotal = d.earnedTotal || 0;
+  const balanceStars = d.balanceStars || 0;
+  const earnedStars = d.earnedStars || 0;
   const content = d.content || [];
   const totalSales = content.reduce((s, c) => s + (c.unlocks || 0), 0);
   card.innerHTML =
     '<div class="card-title">' + L("totalEarned") + " (" + d.creatorShare + "%)</div>" +
-    '<div class="big">$' + usd(earnedTotal) + "</div>" +
+    '<div class="big">' + earnedStars + " ⭐</div>" +
     '<div class="stat-grid">' +
     '<div class="box"><div class="n">' + content.length + '</div><div class="l">' + L("videosN") + "</div></div>" +
     '<div class="box"><div class="n">' + totalSales + '</div><div class="l">' + L("sales") + "</div></div>" +
-    '<div class="box"><div class="n">$' + usd(Math.max(0, balance)) + '</div><div class="l">' + L("available") + "</div></div>" +
+    '<div class="box"><div class="n">' + Math.max(0, balanceStars) + ' ⭐</div><div class="l">' + L("available") + "</div></div>" +
     "</div>";
   fillGrid(
     list,
     content.map((c) =>
       gridCard(c, {
         editable: true,
-        statsHtml: "👁 " + c.views + " · 🔓 " + c.unlocks + " · 💰 $" + usd(c.earned),
+        statsHtml: "👁 " + c.views + " · 🔓 " + c.unlocks + " · 💰 " + (c.earned || 0) + " ⭐",
         onClick: () => openEdit(c),
       }),
     ),
@@ -863,42 +870,28 @@ async function renderProfile() {
     '<div class="who"><div class="n">' + escapeHtml(name) + "</div>" +
     (d.user && d.user.username ? '<div class="u">@' + escapeHtml(d.user.username) + "</div>" : "") + "</div>";
 
-  const balance = typeof d.balance === "number" ? d.balance : 0;
-  const earnedTotal = d.earnedTotal || 0;
+  const balanceStars = d.balanceStars || 0;
+  const earnedStars = d.earnedStars || 0;
+  const minW = d.minWithdrawStars || 100;
   balCard.className = "card stat";
   balCard.innerHTML =
     '<div class="card-title">' + L("balanceTitle") + "</div>" +
-    '<div class="big">$' + usd(Math.max(0, balance)) + "</div>" +
-    '<div class="sub">' + L("totalEarned") + ": $" + usd(earnedTotal) + " · creator " + d.creatorShare + "%</div>";
-  // To'ldirish tugmasi
-  const tb = document.createElement("button");
-  tb.className = "primary";
-  tb.style.marginTop = "16px";
-  tb.textContent = "➕ " + L("topupBtn");
-  if (d.topupEnabled) tb.addEventListener("click", () => openTopup(0, null, null));
-  else tb.disabled = true;
-  balCard.appendChild(tb);
-  // Yechish tugmasi — faqat "pishgan" (withdrawable) summa
-  const withdrawable = typeof d.withdrawable === "number" ? d.withdrawable : balance;
+    '<div class="big">' + Math.max(0, balanceStars) + " ⭐</div>" +
+    '<div class="sub">' + L("totalEarned") + ": " + earnedStars + " ⭐ · creator " + d.creatorShare + "%</div>";
+  // Yechish so'rovi tugmasi (admin qo'lda tarqatadi)
   const wb = document.createElement("button");
   wb.className = "primary";
-  wb.style.marginTop = "8px";
-  const can = withdrawable >= d.minWithdraw && !!d.tonWallet && !!d.payoutEnabled;
+  wb.style.marginTop = "16px";
+  const can = balanceStars >= minW && !!d.payoutEnabled;
   if (can) {
-    wb.textContent = "💸 " + L("withdrawBtn") + " — $" + usd(withdrawable);
+    wb.textContent = "💸 " + L("withdrawBtn") + " — " + balanceStars + " ⭐";
     wb.addEventListener("click", () => withdraw(wb));
   } else {
     wb.textContent = "💸 " + L("withdrawBtn");
     wb.disabled = true;
   }
   balCard.appendChild(wb);
-  const hint = !d.tonWallet
-    ? L("walletNeeded")
-    : withdrawable < d.minWithdraw
-      ? L("minWithdraw") + " $" + usd(d.minWithdraw) + (d.withdrawFee ? " · " + L("feeNote") + " $" + usd(d.withdrawFee) : "")
-      : balance - withdrawable > 0.01
-        ? L("heldNote") + " $" + usd(balance - withdrawable)
-        : "";
+  const hint = balanceStars < minW ? L("minWithdraw") + " " + minW + " ⭐" : L("withdrawNote");
   if (hint) {
     const h = document.createElement("div");
     h.className = "hint";
@@ -906,19 +899,8 @@ async function renderProfile() {
     h.textContent = hint;
     balCard.appendChild(h);
   }
-
-  walletCard.innerHTML = '<div class="card-title">' + L("walletTitle") + "</div>";
-  const inp = document.createElement("input");
-  inp.className = "wallet-input";
-  inp.type = "text";
-  inp.placeholder = L("walletPlaceholder");
-  inp.value = d.tonWallet || "";
-  const wsave = document.createElement("button");
-  wsave.className = "primary";
-  wsave.style.marginTop = "8px";
-  wsave.textContent = L("walletSave");
-  wsave.addEventListener("click", () => saveWallet(inp.value, wsave));
-  walletCard.append(inp, wsave);
+  // Telegram Stars'da hamyon kerak emas
+  walletCard.innerHTML = "";
 
   fillGrid(
     likedList,

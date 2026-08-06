@@ -29,6 +29,8 @@ export const config = {
   tonApiKey: process.env.TON_API_KEY ?? "", // toncenter API key (rate-limit uchun tavsiya)
   usdtJettonMaster: process.env.USDT_JETTON_MASTER ?? "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", // TON'dagi rasmiy USD₮
   tonWalletVersion: process.env.TON_WALLET_VERSION ?? "v5r1", // v5r1 (Tonkeeper default) | v4
+  // To'lov rejimi: "stars" (Telegram Stars) | "tron" (native USDT-TRC20)
+  paymentMode: (process.env.PAYMENT_MODE ?? "stars").toLowerCase(),
   // === Native TRON (USDT-TRC20) — o'zimizniki, uchinchi tomonsiz ===
   tronFullHost: process.env.TRON_FULL_HOST ?? "https://api.trongrid.io",
   tronApiKey: process.env.TRON_API_KEY ?? "", // TronGrid API kaliti (rate-limit uchun; tavsiya etiladi)
