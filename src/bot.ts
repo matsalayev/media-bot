@@ -566,7 +566,7 @@ export async function createComplaint(
   const user = await prisma.user.findUnique({ where: { telegramId: buyerTelegramId } });
   if (!user) return { ok: false, message: t(l, "startFirst") };
   const unlock = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
-  const isPaid = !!unlock && (unlock.creatorEarned > 0 || unlock.creatorEarnedUsdt > 0);
+  const isPaid = !!unlock && (unlock.starsPaid > 0 || unlock.creatorEarnedUsdt > 0); // yaxlitlangan ulush emas, haqiqiy to'lov signali
   if (!unlock || unlock.refunded || !isPaid) {
     return { ok: false, message: t(l, "complaintNeedBuy") };
   }
@@ -1086,9 +1086,14 @@ bot.callbackQuery(/^banc:(\d+)$/, async (ctx) => {
 bot.callbackQuery(/^dismiss:(\d+)$/, async (ctx) => {
   if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
   const id = Number(ctx.match[1]);
-  await prisma.report.update({ where: { id }, data: { status: "dismissed" } }).catch(() => {});
-  await modLog("dismiss", { adminTgId: String(ctx.from?.id), note: `report#${id}` });
-  await ctx.answerCallbackQuery("✅ Rad etildi");
+  // Faqat OCHIQ reportни rad etamiz — allaqachon 'actioned' (o'chirilgan) bo'lsa audit buzilmasin
+  const upd = await prisma.report.updateMany({ where: { id, status: "open" }, data: { status: "dismissed" } });
+  if (upd.count === 1) {
+    await modLog("dismiss", { adminTgId: String(ctx.from?.id), note: `report#${id}` });
+    await ctx.answerCallbackQuery("✅ Rad etildi");
+  } else {
+    await ctx.answerCallbackQuery("Allaqachon ko'rib chiqilgan");
+  }
   await ctx.editMessageReplyMarkup().catch(() => {});
 });
 
@@ -1231,7 +1236,11 @@ bot.callbackQuery(/^spayout_ok:(\d+)$/, async (ctx) => {
 bot.callbackQuery(/^spayout_no:(\d+)$/, async (ctx) => {
   if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery("Ruxsat yo'q");
   const id = Number(ctx.match[1]);
-  await prisma.payout.updateMany({ where: { id, status: { in: ["requested", "processing"] } }, data: { status: "rejected" } });
+  const upd = await prisma.payout.updateMany({ where: { id, status: { in: ["requested", "processing"] } }, data: { status: "rejected" } });
+  if (upd.count === 1) {
+    const p = await prisma.payout.findUnique({ where: { id }, include: { user: true } });
+    if (p) await bot.api.sendMessage(p.user.telegramId, `❌ ${p.amountStars} ⭐ yechish so'rovingiz rad etildi. Balansingiz saqlanib qoldi.`).catch(() => {});
+  }
   await ctx.answerCallbackQuery("Rad etildi");
   await ctx.editMessageReplyMarkup().catch(() => {});
 });

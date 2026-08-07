@@ -12,9 +12,11 @@ async function tick(): Promise<void> {
   try {
     await recomputeAllTiers().catch((e) => console.warn("recomputeTiers:", (e as Error).message));
     await matureBonuses().catch((e) => console.warn("matureBonuses:", (e as Error).message));
-    // Oldingi oy pooli — dispute oynasi o'tgach (oy boshidan bir necha kun keyin) quramiz (idempotent)
+    // Oldingi oy pooli — dispute oynasi o'tgach quramiz (idempotent). Faqat ~1 hafta oynada
+    // qayta urinamiz (qisman qurilish/crash to'ldirilsin), keyin to'xtaymiz — har soat qayta ishlamasin.
     const now = new Date();
-    if (now.getDate() > config.disputeWindowDays) {
+    const d = now.getDate();
+    if (d > config.disputeWindowDays && d <= config.disputeWindowDays + 7) {
       const prior = new Date(now.getFullYear(), now.getMonth() - 1, 15);
       await buildMonthlyPool(ym(prior)).catch((e) => console.warn("buildPool:", (e as Error).message));
     }

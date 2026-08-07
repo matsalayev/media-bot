@@ -268,11 +268,13 @@ export function buildServer() {
     if (!content) return reply.code(404).send({ error: "not found" });
     const user = await prisma.user.findUnique({ where: { telegramId: tg.id }, select: { id: true } });
     if (!user) return { ok: true };
-    const seen = await prisma.view.findFirst({ where: { userId: user.id, contentId }, select: { id: true } });
-    if (!seen) {
-      await prisma.view.create({ data: { contentId, userId: user.id } });
-      await prisma.content.update({ where: { id: contentId }, data: { viewCount: { increment: 1 } } });
-    }
+    await prisma.$transaction(async (tx) => {
+      const seen = await tx.view.findFirst({ where: { userId: user.id, contentId }, select: { id: true } });
+      if (!seen) {
+        await tx.view.create({ data: { contentId, userId: user.id } });
+        await tx.content.update({ where: { id: contentId }, data: { viewCount: { increment: 1 } } });
+      }
+    });
     return { ok: true };
   });
 
@@ -287,7 +289,7 @@ export function buildServer() {
     const curIdx = tiers.findIndex((t) => t.key === user.tier);
     const nextT = curIdx >= 0 && curIdx < tiers.length - 1 ? tiers[curIdx + 1] : null;
     const lifeUsd = (user.lifetimeEarnedStars ?? 0) * config.starUsd;
-    const pendingBonus = await prisma.creatorBonus.aggregate({ _sum: { amountStars: true }, where: { userId: user.id, status: { in: ["pending", "credited"] } } });
+    const pendingBonus = await prisma.creatorBonus.aggregate({ _sum: { amountStars: true }, where: { userId: user.id, status: "pending" } }); // credited bonus allaqachon balansда — ikki marta sanamaymiz
     const daraja = {
       tier: user.tier,
       tierName: tiers.find((t) => t.key === user.tier)?.name ?? "Bronze",

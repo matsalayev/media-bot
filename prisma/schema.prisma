@@ -242,6 +242,7 @@ model Unlock {
   @@unique([userId, contentId])
   @@index([contentId, createdAt]) // qualifyingFor / bonus pool / CRM oralig' agregatlari
   @@index([contentId, refunded]) // contentId bo'yicha groupBy'lar
+  @@index([refunded, createdAt]) // platforma-keng CRM/pool vaqt-oralig' agregatlari (contentId'siz)
 }
 
 model ContentLike {

@@ -61,8 +61,20 @@ export async function recomputeTier(creatorId: number): Promise<void> {
   const { qStars, buyers } = await qualifyingFor(creatorId);
   const qUsd = qStars * config.starUsd;
   const picked = pickTier(qUsd, buyers);
-  const user = await prisma.user.findUnique({ where: { id: creatorId }, select: { tier: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: creatorId },
+    select: { tier: true, tierSharePercent: true, lifetimeEarnedStars: true, verifiedBuyerCount: true, isVerifiedCreator: true, featuredBoost: true },
+  });
   if (!user) return;
+  // Faqat biror narsa o'zgarganда yozamiz (har soat keraksiz yozuv single-connection'ni band qilmasin)
+  const changed =
+    user.tier !== picked.key ||
+    user.tierSharePercent !== picked.share ||
+    user.lifetimeEarnedStars !== qStars ||
+    user.verifiedBuyerCount !== buyers ||
+    user.isVerifiedCreator !== picked.verified ||
+    user.featuredBoost !== picked.featuredBoost;
+  if (!changed) return;
   await prisma.user.update({
     where: { id: creatorId },
     data: {
