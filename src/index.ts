@@ -4,6 +4,7 @@ import { bot, notifyAdmins } from "./bot";
 import { tronEnabled, hotWalletAddress } from "./tron";
 import { buildServer } from "./server";
 import { startPaymentWatcher } from "./watcher";
+import { startIncentiveJobs } from "./jobs";
 
 // Bitta ham stray promise butun jarayonni o'ldirmasin; adminni ogohlantiramiz
 process.on("unhandledRejection", (reason) => {
@@ -93,6 +94,9 @@ async function main() {
 
   // 2c) To'lov kuzatuvchisi — faqat TRON rejimida (Stars'da kerak emas)
   if (config.paymentMode === "tron") startPaymentWatcher();
+
+  // 2d) DARAJA rag'batlantirish (daraja + oylik bonus)
+  startIncentiveJobs();
 
   // 3) Botni ishga tushirish (long polling)
   await bot.start({

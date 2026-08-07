@@ -25,14 +25,56 @@ model User {
   isAdmin       Boolean  @default(false)
   createdAt     DateTime @default(now())
 
+  // DARAJA (rag'batlantirish)
+  tier                String    @default("bronze")
+  tierSharePercent    Int       @default(90) // sotuvда o'qiladigan dinamik ulush (Bronze=90)
+  lifetimeEarnedStars Int       @default(0) // qualifying (matured, refunded emas, arms-length) daromad — cache
+  verifiedBuyerCount  Int       @default(0)
+  isVerifiedCreator   Boolean   @default(false)
+  featuredBoost       Float     @default(1.0) // feed reytingi ko'paytiruvchisi
+  tierUpdatedAt       DateTime?
+
   unlocks  Unlock[]
   views    View[]
-  uploads  Content[]     @relation("creator")
+  uploads  Content[]       @relation("creator")
   likes    ContentLike[]
   saves    SavedItem[]
   payouts  Payout[]
   deposits Deposit[]
   ledger   LedgerEntry[]
+  bonuses  CreatorBonus[]
+}
+
+// Oylik bonus pool granti (komissiyadan o'zini moliyalaydi)
+model CreatorBonus {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  periodYm   String // "2026-08"
+  amountStars Int     @default(0)
+  amountUsdt Float    @default(0)
+  basisStars Int      @default(0) // shu oydagi qualifying daromad (asos)
+  tierAtGrant String  @default("bronze")
+  status     String   @default("pending") // pending | credited | clawed
+  maturesAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, periodYm])
+  @@index([status])
+}
+
+// Daraja o'zgarishlari (audit)
+model TierChange {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  fromTier   String
+  toTier     String
+  atEarnedStars Int   @default(0)
+  atBuyers   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
 }
 
 // USDT-TRC20 to'ldirish (top-up) — noyob summa bo'yicha hot-wallet'ga kelgan to'lovni tanib olamiz
@@ -184,6 +226,8 @@ model Unlock {
   platformFee   Int      @default(0) // (legacy) platforma komissiyasi (Stars)
   creatorEarnedUsdt Float @default(0) // creator ulushi (USDT) — balans shu bo'yicha
   platformFeeUsdt   Float @default(0) // platforma komissiyasi (USDT)
+  shareBps      Int      @default(9000) // sotuvдаги creator ulushi (bps; 9000=90%) — audit uchun snapshot
+  countsForTier Boolean  @default(true) // daraja/bonus uchun sanaladimi (self-buy/tekshirilmagan → false)
   refunded      Boolean  @default(false) // pul qaytarilganmi (aldov shikoyati bo'yicha)
   chargeId      String? // on-chain tx / charge id
   createdAt     DateTime @default(now())

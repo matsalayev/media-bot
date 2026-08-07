@@ -66,19 +66,22 @@
       html += card("Sotuvlar", nf(t.sales), t.distinctBuyers + " xaridor");
       html += card("Kutilayotgan payout", nf(t.pendingPayoutStars) + " ⭐", "yechish so'rovlari", t.pendingPayoutStars > 0 ? "red" : "");
       html += card("Tarqatilmagan balans", nf(t.undistributedLiabilityStars) + " ⭐", usd(t.undistributedLiabilityUsd) + " · jami majburiyat");
+      html += card("Bonus pool (shu oy)", nf(t.bonusPoolThisMonthStars) + " ⭐", usd(t.bonusPoolThisMonthUsd) + " · " + r.bonusPoolPercent + "% komissiyadan", "acc");
       html += '<div class="c wide"><div class="l">Boshqa</div><div class="s">To\'langan: ' + nf(t.paidOutStars) + ' ⭐ · Qaytarilgan: ' + nf(t.refundedStars) + ' ⭐ · Faol creatorlar: ' + t.activeCreators + '/' + t.totalCreators + ' · 1⭐≈' + usd(r.starUsd) + '</div></div>';
       html += "</div>";
 
+      const tierE = { bronze: "🥉", silver: "🥈", gold: "🥇", platinum: "💎", diamond: "👑" };
       html += '<div class="sec">Creatorlar (' + d.creators.length + ")</div>";
       if (!d.creators.length) {
         html += '<div class="muted" style="text-align:center;padding:24px">Hali sotuv yo\'q.</div>';
       } else {
-        html += '<div class="twrap"><table><thead><tr><th>Creator</th><th>🎬</th><th>Sotuv</th><th>⭐ Topgan</th><th>$</th><th>Mavjud ⭐</th><th>To\'langan ⭐</th><th>tgId</th></tr></thead><tbody>';
+        html += '<div class="twrap"><table><thead><tr><th>Creator</th><th>Daraja</th><th>🎬</th><th>Sotuv</th><th>⭐ Topgan</th><th>$</th><th>Mavjud ⭐</th><th>Bonus ⭐</th><th>To\'langan ⭐</th><th>tgId</th></tr></thead><tbody>';
         for (const c of d.creators) {
           const nm = (c.firstName || c.username || c.telegramId || "—");
           html += '<tr><td><div class="name">' + esc(nm) + '</div>' + (c.username ? '<div class="u">@' + esc(c.username) + '</div>' : '') + '</td>' +
+            '<td>' + (tierE[c.tier] || "🥉") + '</td>' +
             '<td>' + c.videos + '</td><td>' + nf(c.sales) + '</td><td>' + nf(c.starsEarned) + '</td><td class="muted">' + usd(c.usdValue) + '</td>' +
-            '<td>' + nf(c.availableStars) + '</td><td class="muted">' + nf(c.paidStars) + '</td><td class="u">' + esc(c.telegramId) + '</td></tr>';
+            '<td>' + nf(c.availableStars) + '</td><td class="muted">' + nf(c.pendingBonusStars || 0) + '</td><td class="muted">' + nf(c.paidStars) + '</td><td class="u">' + esc(c.telegramId) + '</td></tr>';
         }
         html += "</tbody></table></div>";
       }

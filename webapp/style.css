@@ -777,6 +777,21 @@ body {
   color: rgba(255, 200, 90, 0.85);
 }
 
+/* ---------- DARAJA (rag'batlantirish) ---------- */
+.daraja {
+  background: linear-gradient(135deg, rgba(245,179,1,.14), rgba(245,179,1,.04));
+  border: 1px solid rgba(245,179,1,.28);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.dj-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dj-badge { font-size: 15px; font-weight: 800; }
+.dj-badge.tier-gold, .dj-badge.tier-platinum, .dj-badge.tier-diamond { color: #f5b301; }
+.dj-share { font-size: 13px; font-weight: 700; color: #37d67a; }
+.dj-next { font-size: 12px; color: rgba(255,255,255,.6); margin-top: 8px; }
+.dj-bonus { font-size: 13px; font-weight: 600; color: #f5b301; margin-top: 8px; }
+
 /* ---------- Terms gate ---------- */
 .terms-gate {
   position: fixed;

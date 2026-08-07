@@ -25,6 +25,7 @@ import {
   processFraudRefund,
   adjustBalance,
 } from "./ledger";
+import { buyerVerified, creditedBonusStars } from "./incentives";
 
 interface Draft {
   reelFileId?: string;
@@ -186,6 +187,8 @@ async function recordUnlock(
     platformFee?: number;
     creatorEarnedUsdt?: number;
     platformFeeUsdt?: number;
+    shareBps?: number;
+    countsForTier?: boolean;
     chargeId?: string;
   },
 ): Promise<boolean> {
@@ -257,8 +260,8 @@ export async function sendUnlockedVideo(buyerTelegramId: string, contentId: numb
 
 // ==================== Telegram Stars to'lovi ====================
 
-function starsShare(priceStars: number): { creatorEarned: number; platformFee: number } {
-  const creatorEarned = Math.floor((priceStars * config.creatorSharePercent) / 100);
+function starsShare(priceStars: number, sharePercent = config.creatorSharePercent): { creatorEarned: number; platformFee: number } {
+  const creatorEarned = Math.floor((priceStars * sharePercent) / 100);
   return { creatorEarned, platformFee: priceStars - creatorEarned };
 }
 
@@ -292,7 +295,8 @@ export async function creatorStarsBalance(
   userId: number,
 ): Promise<{ earned: number; reserved: number; available: number }> {
   const agg = await prisma.unlock.aggregate({ _sum: { creatorEarned: true }, where: { refunded: false, content: { creatorId: userId } } });
-  const earned = agg._sum.creatorEarned ?? 0;
+  const bonus = await creditedBonusStars(userId); // kreditlangan bonuslar ham yechiladi
+  const earned = (agg._sum.creatorEarned ?? 0) + bonus;
   const paid = await prisma.payout.aggregate({ _sum: { amountStars: true }, where: { userId, status: { in: ["requested", "processing", "paid"] } } });
   const reserved = paid._sum.amountStars ?? 0;
   return { earned, reserved, available: earned - reserved };
@@ -366,8 +370,11 @@ export async function getCrmData(rangeDays?: number) {
   }
 
   const creatorIds = new Set<number>([...earnedAllByCreator.keys(), ...per.keys(), ...videosByCreator.keys()]);
-  const users = await prisma.user.findMany({ where: { id: { in: [...creatorIds] } }, select: { id: true, telegramId: true, username: true, firstName: true } });
+  const users = await prisma.user.findMany({ where: { id: { in: [...creatorIds] } }, select: { id: true, telegramId: true, username: true, firstName: true, tier: true } });
   const uMap = new Map(users.map((u) => [u.id, u]));
+  // Kutilayotgan (hali kreditlanmagan) bonuslar creator bo'yicha
+  const bonusRows = await prisma.creatorBonus.groupBy({ by: ["userId"], _sum: { amountStars: true }, where: { status: "pending" } });
+  const pendingBonusByCreator = new Map(bonusRows.map((b) => [b.userId, b._sum.amountStars ?? 0]));
   const creators = [...creatorIds]
     .map((id) => {
       const u = uMap.get(id);
@@ -378,20 +385,29 @@ export async function getCrmData(rangeDays?: number) {
         telegramId: u?.telegramId ?? "",
         username: u?.username ?? null,
         firstName: u?.firstName ?? null,
+        tier: u?.tier ?? "bronze",
         videos: videosByCreator.get(id) ?? 0,
         sales: rangeE.sales,
         starsEarned: rangeE.starsEarned,
         usdValue: Math.round(rangeE.starsEarned * usd * 100) / 100,
         availableStars: Math.max(0, available),
         paidStars: paidByCreator.get(id) ?? 0,
+        pendingBonusStars: pendingBonusByCreator.get(id) ?? 0,
       };
     })
     .sort((a, b) => b.starsEarned - a.starsEarned);
 
+  // Shu oygi bonus pool (taxminiy) = oylik NET komissiyaning bonusPoolPercent %i
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const monthComm = await prisma.unlock.aggregate({ _sum: { platformFee: true }, where: { refunded: false, createdAt: { gte: monthStart } } });
+  const bonusPoolThisMonth = Math.floor(((monthComm._sum.platformFee ?? 0) * config.bonusPoolPercent) / 100);
+
   const round2 = (n: number) => Math.round(n * usd * 100) / 100;
   return {
     range: { days: rangeDays ?? 0, label: rangeDays ? `${rangeDays}d` : "all" },
-    rates: { starUsd: usd, creatorSharePercent: config.creatorSharePercent, minWithdrawStars: config.minWithdrawStars, platformMode: config.paymentMode },
+    rates: { starUsd: usd, creatorSharePercent: config.creatorSharePercent, minWithdrawStars: config.minWithdrawStars, platformMode: config.paymentMode, bonusPoolPercent: config.bonusPoolPercent },
     totals: {
       totalStars,
       totalUsd: round2(totalStars),
@@ -409,6 +425,8 @@ export async function getCrmData(rangeDays?: number) {
       undistributedLiabilityUsd: round2(Math.max(0, undistributed)),
       activeCreators: per.size,
       totalCreators: videosByCreator.size,
+      bonusPoolThisMonthStars: bonusPoolThisMonth,
+      bonusPoolThisMonthUsd: round2(bonusPoolThisMonth),
     },
     creators,
   };
@@ -1138,12 +1156,19 @@ bot.on("message:successful_payment", async (ctx) => {
     return;
   }
   const stars = sp.total_amount;
-  const { creatorEarned, platformFee } = starsShare(stars);
+  // Dinamik ulush — creator darajasi bo'yicha (Unlock.shareBps snapshot qilinadi)
+  const creator = content.creatorId ? await prisma.user.findUnique({ where: { id: content.creatorId }, select: { tierSharePercent: true } }) : null;
+  const sharePct = creator?.tierSharePercent ?? config.creatorSharePercent;
+  const { creatorEarned, platformFee } = starsShare(stars, sharePct);
+  // Daraja/bonus uchun sanaladimi (self-buy yuqorida chiqib ketgan → arms-length; qolgani tekshirilgan xaridor)
+  const counts = await buyerVerified(user.id).catch(() => false);
   await recordUnlock(user.id, contentId, {
     source: "stars",
     starsPaid: stars,
     creatorEarned,
     platformFee,
+    shareBps: sharePct * 100,
+    countsForTier: counts,
     chargeId: sp.telegram_payment_charge_id,
   });
   try {

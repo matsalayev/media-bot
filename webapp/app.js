@@ -37,7 +37,7 @@ const UI = {
     termsTitle: "Foydalanish shartlari", termsAgree: "✅ Roziman",
     termsText: "Media — kontent platformasi. Pullik kontent Telegram Stars ⭐ orqali sotib olinadi.\n\n• Sotib olingan kontent uchun to'lov qaytarilmaydi — aldov holatidan tashqari.\n• 🛡 Aldov himoyasi: qisqa reel to'liq videoga mos kelmasa, «⚠️ Shikoyat» qiling. Admin tasdiqlasa, to'lovingizning 90% qaytariladi (10% komissiya qaytmaydi).\n• Mualliflar har sotuvdan 90%, platforma 10% oladi.\n• Kontent uchun javobgarlik uni joylagan muallifda.\n• Hamyoningiz va kalitlaringiz xavfsizligi o'zingizga bog'liq.\n\nDavom etish uchun shartlarni qabul qiling.",
     reportTitle: "Shikoyat qilish", reportThanks: "✅ Shikoyat yuborildi", catIllegal: "🚫 Noqonuniy kontent", catSexual: "🔞 Jinsiy / voyaga yetmagan", catCopyright: "©️ Mualliflik huquqi", catViolence: "⚔️ Zo'ravonlik", catOther: "• Boshqa sabab",
-    topupTitle: "Balansni to'ldirish", topupBtn: "To'ldirish", balanceTitle: "Balansingiz", close: "Yopish", copied: "📋 Nusxalandi", feeNote: "tarmoq haqi", payoutSoon: "⚙️ Hozircha o'chiq, keyinroq urinib ko'ring", heldNote: "⏳ Pishmoqda (nizolar oynasi):", withdrawNote: "Yechish so'rovi adminga boradi va qo'lda tarqatiladi.",
+    topupTitle: "Balansni to'ldirish", topupBtn: "To'ldirish", balanceTitle: "Balansingiz", close: "Yopish", copied: "📋 Nusxalandi", feeNote: "tarmoq haqi", payoutSoon: "⚙️ Hozircha o'chiq, keyinroq urinib ko'ring", heldNote: "⏳ Pishmoqda (nizolar oynasi):", withdrawNote: "Yechish so'rovi adminga boradi va qo'lda tarqatiladi.", shareWord: "ulush", buyersShort: "xaridor", almostThere: "deyarli tayyor!", maxTier: "Eng yuqori daraja!", pendingBonus: "Kutilayotgan bonus",
     topupPick: "To'ldirish summasini tanlang (USDT):", topupNeed: "Bu video uchun kamida", topupSendExact: "AYNAN shu summani yuboring (USDT-TRC20):", topupAddress: "Manzil (TRON / TRC20):", topupWaiting: "To'lov kutilmoqda…", topupDone: "Balans to'ldirildi!", topupExpired: "Muddati o'tdi — qayta urinib ko'ring", topupNote: "⚠️ Faqat TRON (TRC20) tarmog'ida, AYNAN yuqoridagi summada yuboring. 1–2 daqiqada tushadi.",
   },
   ru: {
@@ -63,7 +63,7 @@ const UI = {
     termsTitle: "Условия использования", termsAgree: "✅ Принимаю",
     termsText: "Media — платформа контента. Платный контент покупается за Telegram Stars ⭐.\n\n• Оплата за купленный контент не возвращается — кроме случая обмана.\n• 🛡 Защита от обмана: если короткий reel не соответствует полному видео, подайте «⚠️ Жалобу». При подтверждении вернётся 90% (10% комиссии не возвращается).\n• Авторы получают 90% с продажи, платформа — 10%.\n• Ответственность за контент несёт автор.\n• Безопасность кошелька и ключей — на вас.\n\nЧтобы продолжить, примите условия.",
     reportTitle: "Пожаловаться", reportThanks: "✅ Жалоба отправлена", catIllegal: "🚫 Незаконный контент", catSexual: "🔞 Секс / несовершеннолетние", catCopyright: "©️ Авторские права", catViolence: "⚔️ Насилие", catOther: "• Другое",
-    topupTitle: "Пополнить баланс", topupBtn: "Пополнить", balanceTitle: "Ваш баланс", close: "Закрыть", copied: "📋 Скопировано", feeNote: "сетевая комиссия", payoutSoon: "⚙️ Пока отключено, попробуйте позже", heldNote: "⏳ Созревает (окно споров):", withdrawNote: "Запрос на вывод уходит админу и распределяется вручную.",
+    topupTitle: "Пополнить баланс", topupBtn: "Пополнить", balanceTitle: "Ваш баланс", close: "Закрыть", copied: "📋 Скопировано", feeNote: "сетевая комиссия", payoutSoon: "⚙️ Пока отключено, попробуйте позже", heldNote: "⏳ Созревает (окно споров):", withdrawNote: "Запрос на вывод уходит админу и распределяется вручную.", shareWord: "доля", buyersShort: "покуп.", almostThere: "почти!", maxTier: "Максимальный уровень!", pendingBonus: "Ожидаемый бонус",
     topupPick: "Выберите сумму пополнения (USDT):", topupNeed: "Для этого видео минимум", topupSendExact: "Отправьте ТОЧНО эту сумму (USDT-TRC20):", topupAddress: "Адрес (TRON / TRC20):", topupWaiting: "Ожидаем оплату…", topupDone: "Баланс пополнен!", topupExpired: "Срок истёк — попробуйте снова", topupNote: "⚠️ Только сеть TRON (TRC20), ТОЧНО указанной суммой. Зачислится за 1–2 минуты.",
   },
   en: {
@@ -89,7 +89,7 @@ const UI = {
     termsTitle: "Terms of Use", termsAgree: "✅ I agree",
     termsText: "Media is a content platform. Paid content is purchased with Telegram Stars ⭐.\n\n• Payment for purchased content is non-refundable — except in cases of bait.\n• 🛡 Fraud protection: if a short reel doesn't match the full video, file a «⚠️ Complaint». If approved, 90% is refunded (the 10% commission is non-refundable).\n• Creators earn 90% per sale, the platform takes 10%.\n• Creators are responsible for their content.\n• The security of your wallet and keys is your own responsibility.\n\nAccept the terms to continue.",
     reportTitle: "Report", reportThanks: "✅ Report sent", catIllegal: "🚫 Illegal content", catSexual: "🔞 Sexual / minors", catCopyright: "©️ Copyright", catViolence: "⚔️ Violence", catOther: "• Other",
-    topupTitle: "Top up balance", topupBtn: "Top up", balanceTitle: "Your balance", close: "Close", copied: "📋 Copied", feeNote: "network fee", payoutSoon: "⚙️ Off for now, try again later", heldNote: "⏳ Maturing (dispute window):", withdrawNote: "Withdrawal request goes to the admin and is distributed manually.",
+    topupTitle: "Top up balance", topupBtn: "Top up", balanceTitle: "Your balance", close: "Close", copied: "📋 Copied", feeNote: "network fee", payoutSoon: "⚙️ Off for now, try again later", heldNote: "⏳ Maturing (dispute window):", withdrawNote: "Withdrawal request goes to the admin and is distributed manually.", shareWord: "share", buyersShort: "buyers", almostThere: "almost there!", maxTier: "Top tier!", pendingBonus: "Pending bonus",
     topupPick: "Choose a top-up amount (USDT):", topupNeed: "For this video at least", topupSendExact: "Send EXACTLY this amount (USDT-TRC20):", topupAddress: "Address (TRON / TRC20):", topupWaiting: "Waiting for payment…", topupDone: "Balance topped up!", topupExpired: "Expired — please try again", topupNote: "⚠️ Only TRON (TRC20) network, EXACTLY the amount above. Credited in 1–2 minutes.",
   },
 };
@@ -873,11 +873,31 @@ async function renderProfile() {
   const balanceStars = d.balanceStars || 0;
   const earnedStars = d.earnedStars || 0;
   const minW = d.minWithdrawStars || 100;
+  // DARAJA kartasi
+  const dj = d.daraja || {};
+  const tierEmoji = { bronze: "🥉", silver: "🥈", gold: "🥇", platinum: "💎", diamond: "👑" };
+  let darajaHtml = "";
+  if (dj.tier) {
+    darajaHtml =
+      '<div class="daraja"><div class="dj-top"><span class="dj-badge tier-' + dj.tier + '">' + (tierEmoji[dj.tier] || "🎖") + " " + esc(dj.tierName || "") + (dj.verified ? " ✅" : "") + '</span>' +
+      '<span class="dj-share">' + (dj.sharePercent || 90) + "% " + L("shareWord") + "</span></div>";
+    if (dj.next) {
+      const parts = [];
+      if (dj.next.needUsd > 0) parts.push("+$" + dj.next.needUsd);
+      if (dj.next.needBuyers > 0) parts.push("+" + dj.next.needBuyers + " " + L("buyersShort"));
+      darajaHtml += '<div class="dj-next">→ ' + esc(dj.next.name) + " (" + dj.next.share + "%): " + (parts.length ? parts.join(" · ") : L("almostThere")) + "</div>";
+    } else {
+      darajaHtml += '<div class="dj-next">👑 ' + L("maxTier") + "</div>";
+    }
+    if (dj.pendingBonusStars > 0) darajaHtml += '<div class="dj-bonus">🎁 ' + L("pendingBonus") + ": " + dj.pendingBonusStars + " ⭐</div>";
+    darajaHtml += "</div>";
+  }
   balCard.className = "card stat";
   balCard.innerHTML =
+    darajaHtml +
     '<div class="card-title">' + L("balanceTitle") + "</div>" +
     '<div class="big">' + Math.max(0, balanceStars) + " ⭐</div>" +
-    '<div class="sub">' + L("totalEarned") + ": " + earnedStars + " ⭐ · creator " + d.creatorShare + "%</div>";
+    '<div class="sub">' + L("totalEarned") + ": " + earnedStars + " ⭐ · creator " + (dj.sharePercent || d.creatorShare) + "%</div>";
   // Yechish so'rovi tugmasi (admin qo'lda tarqatadi)
   const wb = document.createElement("button");
   wb.className = "primary";

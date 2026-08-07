@@ -15,6 +15,21 @@ export const config = {
   // Creator ekonomikasi
   creatorSharePercent: Number(process.env.CREATOR_SHARE_PERCENT ?? 90), // creator ulushi % (platforma 10%)
   minWithdrawStars: Number(process.env.MIN_WITHDRAW_STARS ?? 100), // (legacy)
+  // === DARAJA — creator rag'batlantirish tizimi ===
+  // Darajalar: dual-gate (USD daromad VA tekshirilgan xaridor soni), ulush %, bonus vazni.
+  // Faqat kelajakdagi sotuvga ta'sir qiladi; har sotuvda Unlock.shareBps snapshot qilinadi.
+  tiers: [
+    { key: "bronze", name: "Bronze", usd: 0, buyers: 0, share: 90, weight: 1.0, uploadsPerHour: 10, maturationDays: 3, featuredBoost: 1.0, verified: false },
+    { key: "silver", name: "Silver", usd: 75, buyers: 20, share: 91, weight: 1.15, uploadsPerHour: 15, maturationDays: 3, featuredBoost: 1.1, verified: false },
+    { key: "gold", name: "Gold", usd: 300, buyers: 80, share: 92, weight: 1.3, uploadsPerHour: 25, maturationDays: 2, featuredBoost: 1.2, verified: true },
+    { key: "platinum", name: "Platinum", usd: 1200, buyers: 300, share: 94, weight: 1.5, uploadsPerHour: 40, maturationDays: 1, featuredBoost: 1.3, verified: true },
+    { key: "diamond", name: "Diamond", usd: 6000, buyers: 1000, share: 95, weight: 1.75, uploadsPerHour: 60, maturationDays: 1, featuredBoost: 1.4, verified: true },
+  ] as { key: string; name: string; usd: number; buyers: number; share: number; weight: number; uploadsPerHour: number; maturationDays: number; featuredBoost: number; verified: boolean }[],
+  bonusPoolPercent: Number(process.env.BONUS_POOL_PERCENT ?? 15), // oylik NET komissiyaning shuncha %i bonus pool
+  buyerVerifyMinAgeDays: Number(process.env.BUYER_VERIFY_MIN_AGE_DAYS ?? 3), // xaridor "tekshirilgan" bo'lishi uchun akkaunt yoshi
+  buyerVerifyMinCreators: Number(process.env.BUYER_VERIFY_MIN_CREATORS ?? 3), // shuncha BOSHQA creatordan xarid qilgan bo'lishi
+  buyerConcentrationCapPct: Number(process.env.BUYER_CONCENTRATION_CAP_PCT ?? 15), // bitta xaridor creator qualifying daromadining max %i
+  incentivesEnabled: (process.env.INCENTIVES_ENABLED ?? "1") === "1",
   // Moderatsiya
   uploadsPerHour: Number(process.env.UPLOADS_PER_HOUR ?? 10), // bir userга soatiga max yuklash
   strikeBanThreshold: Number(process.env.STRIKE_BAN_THRESHOLD ?? 3), // shuncha strike'дан keyin auto-ban

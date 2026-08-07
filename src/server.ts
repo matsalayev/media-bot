@@ -257,6 +257,25 @@ export function buildServer() {
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const user = await getUser(tg);
     const sbal = await creatorStarsBalance(user.id);
+    // DARAJA — joriy daraja + keyingi darajaga progress + kutilayotgan bonus
+    const tiers = config.tiers;
+    const curIdx = tiers.findIndex((t) => t.key === user.tier);
+    const nextT = curIdx >= 0 && curIdx < tiers.length - 1 ? tiers[curIdx + 1] : null;
+    const lifeUsd = (user.lifetimeEarnedStars ?? 0) * config.starUsd;
+    const pendingBonus = await prisma.creatorBonus.aggregate({ _sum: { amountStars: true }, where: { userId: user.id, status: { in: ["pending", "credited"] } } });
+    const daraja = {
+      tier: user.tier,
+      tierName: tiers.find((t) => t.key === user.tier)?.name ?? "Bronze",
+      sharePercent: user.tierSharePercent,
+      verified: user.isVerifiedCreator,
+      lifetimeStars: user.lifetimeEarnedStars ?? 0,
+      lifetimeUsd: Math.round(lifeUsd * 100) / 100,
+      verifiedBuyers: user.verifiedBuyerCount ?? 0,
+      pendingBonusStars: pendingBonus._sum.amountStars ?? 0,
+      next: nextT
+        ? { name: nextT.name, share: nextT.share, needUsd: Math.max(0, Math.round((nextT.usd - lifeUsd) * 100) / 100), needBuyers: Math.max(0, nextT.buyers - (user.verifiedBuyerCount ?? 0)) }
+        : null,
+    };
     const list = await prisma.content.findMany({
       where: { creatorId: user.id, status: { not: "removed" } },
       orderBy: { id: "desc" },
@@ -290,6 +309,7 @@ export function buildServer() {
       starUsd: config.starUsd,
       creatorShare: config.creatorSharePercent,
       payoutEnabled: true,
+      daraja,
       content: await Promise.all(
         list.map(async (c) => ({
           id: c.id,
