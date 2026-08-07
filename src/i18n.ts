@@ -24,14 +24,14 @@ const S: Record<string, Entry> = {
   },
   openApp: { uz: "🎬 Ochish", ru: "🎬 Открыть", en: "🎬 Open" },
   help: {
-    uz: "🎬 Menyudagi «Media» tugmasi orqali ilovani oching.\n\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromadim (USDT)\n/wallet — TRC20 hamyon ulash\n/withdraw — USDT'ni hamyonga yechish\n/lang — tilni o'zgartirish",
-    ru: "🎬 Откройте приложение кнопкой «Media» в меню.\n\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — мой доход (USDT)\n/wallet — привязать TRC20 кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык",
-    en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings (USDT)\n/wallet — link TRC20 wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language",
+    uz: "🎬 Menyudagi «Media» tugmasi orqali ilovani oching.\n\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromadim (⭐)\n/wallet — TRC20 hamyon ulash\n/withdraw — Stars yechish (⭐)\n/lang — tilni o'zgartirish",
+    ru: "🎬 Откройте приложение кнопкой «Media» в меню.\n\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — мой доход (⭐)\n/wallet — привязать TRC20 кошелёк\n/withdraw — вывести Stars (⭐)\n/lang — сменить язык",
+    en: "🎬 Open the app via the «Media» menu button.\n\n/upload — post a video\n/mycontent — my content\n/earnings — my earnings (⭐)\n/wallet — link TRC20 wallet\n/withdraw — withdraw Stars (⭐)\n/lang — change language",
   },
   adminPanel: {
-    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TRC20 hamyon ulash\n/withdraw — USDT'ni hamyonga yechish\n/terms — foydalanish shartlari\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — statistika + hot-wallet\n/hotwallet — hot-wallet manzili va balansi (USDT/TRX)\n/payouts — payout tarixi\n/complaints — aldov shikoyatlari\n/resolvepayout — payoutni qo'lda hal qilish\n/credit <tgId> <usdt> — balansni qo'lda to'ldirish\n\n🛡 Moderatsiya:\n/reports — shikoyatlar ro'yxati\n/takedown <id> — kontentni o'chirish\n/ban <tgId> — foydalanuvchini bloklash\n/unban <tgId> — blokdan chiqarish",
-    ru: "🛠 Админ-панель — все команды\n\n👤 Пользователь:\n/start — начать / выбрать язык\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — доход (USDT)\n/wallet — привязать TRC20 кошелёк\n/withdraw — вывести USDT на кошелёк\n/lang — сменить язык\n/help — помощь\n/cancel — отменить процесс\n\n🔑 Админ:\n/admin — эта панель\n/add — добавить видео (админ)\n/balance — статистика + hot-wallet\n/hotwallet — адрес и баланс hot-wallet (USDT/TRX)\n/payouts — история выплат\n/complaints — жалобы на обман\n/resolvepayout — выплата вручную\n/credit <tgId> <usdt> — пополнить баланс вручную",
-    en: "🛠 Admin panel — all commands\n\n👤 User:\n/start — start / choose language\n/upload — post a video\n/mycontent — my content\n/earnings — earnings (USDT)\n/wallet — link TRC20 wallet\n/withdraw — withdraw USDT to wallet\n/lang — change language\n/help — help\n/cancel — cancel the flow\n\n🔑 Admin:\n/admin — this panel\n/add — add a video (admin)\n/balance — stats + hot-wallet\n/hotwallet — hot-wallet address and balance (USDT/TRX)\n/payouts — payout history\n/complaints — bait complaints\n/resolvepayout — resolve a payout manually\n/credit <tgId> <usdt> — top up a balance manually",
+    uz: "🛠 Admin panel — barcha buyruqlar\n\n👤 Foydalanuvchi:\n/start — boshlash / til tanlash\n/upload — video joylash\n/mycontent — mening kontentim\n/earnings — daromad (USDT)\n/wallet — TRC20 hamyon ulash\n/withdraw — Stars yechish (⭐)\n/terms — foydalanish shartlari\n/lang — tilni o'zgartirish\n/help — yordam\n/cancel — jarayonni bekor qilish\n\n🔑 Admin:\n/admin — shu panel\n/add — video qo'shish (admin)\n/balance — statistika + hot-wallet\n/hotwallet — hot-wallet manzili va balansi (USDT/TRX)\n/payouts — payout tarixi\n/complaints — aldov shikoyatlari\n/resolvepayout — payoutni qo'lda hal qilish\n/credit <tgId> <usdt> — balansni qo'lda to'ldirish\n\n🛡 Moderatsiya:\n/reports — shikoyatlar ro'yxati\n/takedown <id> — kontentni o'chirish\n/ban <tgId> — foydalanuvchini bloklash\n/unban <tgId> — blokdan chiqarish",
+    ru: "🛠 Админ-панель — все команды\n\n👤 Пользователь:\n/start — начать / выбрать язык\n/upload — загрузить видео\n/mycontent — мои видео\n/earnings — доход (USDT)\n/wallet — привязать TRC20 кошелёк\n/withdraw — вывести Stars (⭐)\n/lang — сменить язык\n/help — помощь\n/cancel — отменить процесс\n\n🔑 Админ:\n/admin — эта панель\n/add — добавить видео (админ)\n/balance — статистика + hot-wallet\n/hotwallet — адрес и баланс hot-wallet (USDT/TRX)\n/payouts — история выплат\n/complaints — жалобы на обман\n/resolvepayout — выплата вручную\n/credit <tgId> <usdt> — пополнить баланс вручную",
+    en: "🛠 Admin panel — all commands\n\n👤 User:\n/start — start / choose language\n/upload — post a video\n/mycontent — my content\n/earnings — earnings (USDT)\n/wallet — link TRC20 wallet\n/withdraw — withdraw Stars (⭐)\n/lang — change language\n/help — help\n/cancel — cancel the flow\n\n🔑 Admin:\n/admin — this panel\n/add — add a video (admin)\n/balance — stats + hot-wallet\n/hotwallet — hot-wallet address and balance (USDT/TRX)\n/payouts — payout history\n/complaints — bait complaints\n/resolvepayout — resolve a payout manually\n/credit <tgId> <usdt> — top up a balance manually",
   },
   uploadStart: {
     uz: "🎬 Yangi video.\n\n1/3 — Qisqa REELS videoni (vertikal) yuboring.\n\nBekor qilish: /cancel",
@@ -115,6 +115,11 @@ const S: Record<string, Entry> = {
     uz: "❌ Noto'g'ri TRC20 manzil. Manzil «T» bilan boshlanadi (masalan Trust Wallet / Binance TRON).",
     ru: "❌ Неверный TRC20 адрес. Адрес начинается с «T» (например Trust Wallet / Binance TRON).",
     en: "❌ Invalid TRC20 address. It starts with «T» (e.g. Trust Wallet / Binance TRON).",
+  },
+  walletStarsInfo: {
+    uz: "⭐ To'lovlar Telegram Stars orqali. Hamyon ulash shart emas — daromadingizni /withdraw orqali yeching (admin tarqatadi).",
+    ru: "⭐ Оплаты через Telegram Stars. Кошелёк не нужен — выводите доход через /withdraw (админ распределит).",
+    en: "⭐ Payments use Telegram Stars. No wallet needed — withdraw earnings via /withdraw (admin distributes).",
   },
   payoutPending: {
     uz: "⏳ Oldingi yechish so'rovingiz hali jarayonda. Biroz kuting.",

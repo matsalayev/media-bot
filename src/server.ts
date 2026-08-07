@@ -30,6 +30,14 @@ async function getUser(tg: TgUser) {
   });
 }
 
+// Fayl haqiqiy videomi (magic bytes: MP4/MOV 'ftyp', WebM/Matroska EBML)
+function looksLikeVideo(b: Buffer): boolean {
+  if (!b || b.length < 12) return false;
+  if (b.toString("ascii", 4, 8) === "ftyp") return true; // mp4/mov/m4v
+  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return true; // webm/mkv
+  return false;
+}
+
 function botUsername(): string {
   try {
     return bot.botInfo.username;
@@ -178,15 +186,20 @@ export function buildServer() {
     const contentId = Number((req.body as { contentId?: number })?.contentId);
     if (!contentId) return reply.code(400).send({ error: "contentId required" });
     const user = await getUser(tg);
-    const existing = await prisma.contentLike.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
-    if (existing) {
-      await prisma.contentLike.delete({ where: { id: existing.id } });
-      const c = await prisma.content.update({ where: { id: contentId }, data: { likeCount: { decrement: 1 } } });
-      return { liked: false, likeCount: Math.max(0, c.likeCount) };
-    }
-    await prisma.contentLike.create({ data: { userId: user.id, contentId } });
-    const c = await prisma.content.update({ where: { id: contentId }, data: { likeCount: { increment: 1 } } });
-    return { liked: true, likeCount: c.likeCount };
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.contentLike.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+      let liked: boolean;
+      if (existing) {
+        await tx.contentLike.delete({ where: { id: existing.id } });
+        liked = false;
+      } else {
+        await tx.contentLike.create({ data: { userId: user.id, contentId } });
+        liked = true;
+      }
+      const likeCount = await tx.contentLike.count({ where: { contentId } }); // haqiqiy hisob — drift/manfiy yo'q
+      await tx.content.update({ where: { id: contentId }, data: { likeCount } });
+      return { liked, likeCount };
+    });
   });
 
   // ---- Save (toggle) ----
@@ -196,15 +209,20 @@ export function buildServer() {
     const contentId = Number((req.body as { contentId?: number })?.contentId);
     if (!contentId) return reply.code(400).send({ error: "contentId required" });
     const user = await getUser(tg);
-    const existing = await prisma.savedItem.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
-    if (existing) {
-      await prisma.savedItem.delete({ where: { id: existing.id } });
-      const c = await prisma.content.update({ where: { id: contentId }, data: { saveCount: { decrement: 1 } } });
-      return { saved: false, saveCount: Math.max(0, c.saveCount) };
-    }
-    await prisma.savedItem.create({ data: { userId: user.id, contentId } });
-    const c = await prisma.content.update({ where: { id: contentId }, data: { saveCount: { increment: 1 } } });
-    return { saved: true, saveCount: c.saveCount };
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.savedItem.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
+      let saved: boolean;
+      if (existing) {
+        await tx.savedItem.delete({ where: { id: existing.id } });
+        saved = false;
+      } else {
+        await tx.savedItem.create({ data: { userId: user.id, contentId } });
+        saved = true;
+      }
+      const saveCount = await tx.savedItem.count({ where: { contentId } });
+      await tx.content.update({ where: { id: contentId }, data: { saveCount } });
+      return { saved, saveCount };
+    });
   });
 
   // ---- Share (deep link + hisob) ----
@@ -240,14 +258,21 @@ export function buildServer() {
     return createReport(tg.id, contentId, String(body.category ?? "other"), body.reason, u?.lang ?? undefined);
   });
 
-  // ---- Ko'rishni hisoblash ----
+  // ---- Ko'rishni hisoblash (auth + validatsiya + dedup: user boshiga bir marta) ----
   app.post("/api/view", async (req, reply) => {
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
     if (!contentId) return reply.code(400).send({ error: "contentId required" });
-    const user = tg ? await prisma.user.findUnique({ where: { telegramId: tg.id } }) : null;
-    await prisma.view.create({ data: { contentId, userId: user?.id ?? null } });
-    await prisma.content.update({ where: { id: contentId }, data: { viewCount: { increment: 1 } } });
+    const content = await prisma.content.findFirst({ where: { id: contentId, status: "published" }, select: { id: true } });
+    if (!content) return reply.code(404).send({ error: "not found" });
+    const user = await prisma.user.findUnique({ where: { telegramId: tg.id }, select: { id: true } });
+    if (!user) return { ok: true };
+    const seen = await prisma.view.findFirst({ where: { userId: user.id, contentId }, select: { id: true } });
+    if (!seen) {
+      await prisma.view.create({ data: { contentId, userId: user.id } });
+      await prisma.content.update({ where: { id: contentId }, data: { viewCount: { increment: 1 } } });
+    }
     return { ok: true };
   });
 
@@ -405,8 +430,12 @@ export function buildServer() {
     const fields: Record<string, string> = {};
     const files: Record<string, { buffer: Buffer; filename: string }> = {};
     for await (const part of req.parts()) {
-      if (part.type === "file") files[part.fieldname] = { buffer: await part.toBuffer(), filename: part.filename || "video.mp4" };
-      else fields[part.fieldname] = String(part.value);
+      if (part.type === "file") {
+        const buffer = await part.toBuffer();
+        // Faqat haqiqiy video (magic bytes) — junk fayl S3'ga tushmasin (mimetype mijozда soxta bo'lishi mumkin)
+        if (!looksLikeVideo(buffer)) return reply.code(400).send({ error: "faqat video fayl (mp4/mov/webm) qabul qilinadi" });
+        files[part.fieldname] = { buffer, filename: part.filename || "video.mp4" };
+      } else fields[part.fieldname] = String(part.value);
     }
     if (!files.reel || !files.video) return reply.code(400).send({ error: "reel va to'liq video kerak" });
     const title = (fields.title ?? "").trim();

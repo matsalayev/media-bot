@@ -165,6 +165,7 @@ function toast(msg) {
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
+const esc = escapeHtml; // DARAJA kartasi shu nomdan foydalanadi
 function usd(n) {
   return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toFixed(2);
 }
@@ -197,16 +198,17 @@ function renderReel(it) {
   const v = document.createElement("video");
   v.src = it.reelUrl;
   v.loop = true;
-  v.muted = true;
+  v.muted = feedMuted; // sessiya bo'yicha bir marta ovoz yoqilsa, keyingi reel'larda ham yoniq qoladi
   v.playsInline = true;
   v.setAttribute("webkit-playsinline", "");
   v.preload = "metadata";
 
   const mute = document.createElement("button");
   mute.className = "mute-badge";
-  mute.innerHTML = ICON.soundOff;
+  mute.innerHTML = feedMuted ? ICON.soundOff : ICON.soundOn;
   const toggleMute = () => {
     v.muted = !v.muted;
+    feedMuted = v.muted; // butun feed uchun eslab qolamiz
     mute.innerHTML = v.muted ? ICON.soundOff : ICON.soundOn;
     if (v.paused) v.play().catch(() => {});
   };
@@ -395,17 +397,22 @@ async function buyCrypto(it, btn) {
       toast(L("sentToChat"));
       return;
     }
-    if (d.status === "invoice" && d.link && tg && tg.openInvoice) {
-      tg.openInvoice(d.link, (status) => {
+    if (d.status === "invoice" && d.link) {
+      const done = (status) => {
         if (status === "paid") {
           it.unlocked = true;
           btn.textContent = watchLabel(it);
           toast(L("sentToChatHint"));
         } else if (status === "failed") {
           toast(L("paymentFailed"));
+        } else if (status === "pending") {
+          toast(L("paymentPending"));
         }
         btn.disabled = false;
-      });
+      };
+      if (tg && tg.openInvoice) tg.openInvoice(d.link, done);
+      else if (tg && tg.openTelegramLink) { tg.openTelegramLink(d.link); btn.disabled = false; }
+      else { window.open(d.link, "_blank"); btn.disabled = false; }
       return;
     }
     toast(d.error || L("errGeneric"));
@@ -539,6 +546,7 @@ function copyText(v) {
 const seen = new Set();
 let io = null;
 let allItems = []; // sahifadagi barcha reels (aylanish uchun)
+let feedMuted = true; // feed ovozi (sessiya bo'yicha eslab qolinadi)
 let cycleIdx = 0; // keyingi qo'shiladigan element (aylanadi)
 let appending = false;
 
@@ -919,8 +927,9 @@ async function renderProfile() {
     h.textContent = hint;
     balCard.appendChild(h);
   }
-  // Telegram Stars'da hamyon kerak emas
+  // Telegram Stars'da hamyon kerak emas — bo'sh kartani butunlay yashiramiz
   walletCard.innerHTML = "";
+  walletCard.hidden = true;
 
   fillGrid(
     likedList,

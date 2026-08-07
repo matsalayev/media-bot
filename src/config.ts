@@ -32,6 +32,7 @@ export const config = {
   incentivesEnabled: (process.env.INCENTIVES_ENABLED ?? "1") === "1",
   // Moderatsiya
   uploadsPerHour: Number(process.env.UPLOADS_PER_HOUR ?? 10), // bir userга soatiga max yuklash
+  reportsPerHour: Number(process.env.REPORTS_PER_HOUR ?? 20), // bir userга soatiga max shikoyat (flood himoyasi)
   strikeBanThreshold: Number(process.env.STRIKE_BAN_THRESHOLD ?? 3), // shuncha strike'дан keyin auto-ban
   // Narxlash / payout birligi — USDT
   starUsd: Number(process.env.STAR_USD ?? 0.013), // 1 Star ≈ qancha USD (Telegram developer withdraw kursi)

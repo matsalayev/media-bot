@@ -139,6 +139,9 @@ model Content {
   orders     Order[]
   complaints Complaint[]
   reports    Report[]
+
+  @@index([creatorId])
+  @@index([status, likeCount])
 }
 
 // USDT (TON Connect) to'lov buyurtmasi — on-chain to'lovni aniqlash uchun
@@ -187,6 +190,7 @@ model Report {
   content Content @relation(fields: [contentId], references: [id])
 
   @@index([status])
+  @@index([reporterTgId, contentId]) // dedup/rate-limit qidiruvi
 }
 
 // Moderatsiya audit jurnali (dalil/hisobot uchun)
@@ -236,6 +240,8 @@ model Unlock {
   content Content @relation(fields: [contentId], references: [id])
 
   @@unique([userId, contentId])
+  @@index([contentId, createdAt]) // qualifyingFor / bonus pool / CRM oralig' agregatlari
+  @@index([contentId, refunded]) // contentId bo'yicha groupBy'lar
 }
 
 model ContentLike {
@@ -270,6 +276,8 @@ model View {
 
   user    User?   @relation(fields: [userId], references: [id])
   content Content @relation(fields: [contentId], references: [id])
+
+  @@index([userId, contentId]) // takroriy ko'rishni aniqlash (dedup)
 }
 
 model Payout {

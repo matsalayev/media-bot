@@ -40,7 +40,7 @@ export async function qualifyingFor(creatorId: number): Promise<{ qStars: number
   const rows = await prisma.unlock.groupBy({
     by: ["userId"],
     _sum: { creatorEarned: true },
-    where: { contentId: { in: ids }, refunded: false, countsForTier: true, createdAt: { lt: cutoff } },
+    where: { contentId: { in: ids }, refunded: false, countsForTier: true, creatorEarned: { gt: 0 }, createdAt: { lt: cutoff } },
   });
   const buyers = rows.length;
   const rawTotal = rows.reduce((s, r) => s + (r._sum.creatorEarned ?? 0), 0);
@@ -107,10 +107,8 @@ export async function creditedBonusStars(userId: number): Promise<number> {
  * qualifying daromadi × daraja vazni bo'yicha ulush. Grant "pending", disputeWindow'дан keyin kreditlanadi.
  */
 export async function buildMonthlyPool(periodYm: string): Promise<{ pool: number; grants: number }> {
-  // Allaqachon qurilganmi?
-  const exists = await prisma.creatorBonus.findFirst({ where: { periodYm } });
-  if (exists) return { pool: 0, grants: 0 };
-
+  // Idempotentlik @@unique([userId, periodYm]) bilan — qayta ishga tushsa yo'q grantlar to'ldiriladi,
+  // borlar P2002'да no-op bo'ladi (qisman xatoда grant abadiy yo'qolmaydi).
   const [y, m] = periodYm.split("-").map(Number);
   const start = new Date(y, m - 1, 1);
   const end = new Date(y, m, 1);
@@ -161,8 +159,8 @@ export async function buildMonthlyPool(periodYm: string): Promise<{ pool: number
     // (Sybil wash-trading orqali boshqalar komissiyasini o'zlashtirolmaydi). Ortiqcha taqsimlanmaydi.
     const amount = Math.min(Math.floor((pool * w) / totalWeight), monthFee.get(cid) ?? 0);
     if (amount <= 0) continue;
-    await prisma.creatorBonus
-      .create({
+    try {
+      await prisma.creatorBonus.create({
         data: {
           userId: cid,
           periodYm,
@@ -173,9 +171,11 @@ export async function buildMonthlyPool(periodYm: string): Promise<{ pool: number
           status: "pending",
           maturesAt,
         },
-      })
-      .then(() => grants++)
-      .catch(() => {}); // @@unique — dublikat bo'lsa e'tibor bermaymiz
+      });
+      grants++;
+    } catch (e) {
+      if ((e as { code?: string })?.code !== "P2002") console.warn("bonus grant xato:", (e as Error).message); // dublikatдан boshqasini logga chiqaramiz
+    }
   }
   return { pool, grants };
 }

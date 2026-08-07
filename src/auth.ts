@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { config } from "./config";
 
 export interface TgUser {
@@ -26,12 +26,20 @@ export function validateInitData(initData: string): TgUser | null {
     .join("\n");
 
   const secretKey = createHmac("sha256", "WebAppData").update(config.botToken).digest();
-  const computed = createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
-  if (computed !== hash) return null;
+  const computed = createHmac("sha256", secretKey).update(dataCheckString).digest(); // Buffer
+  // Constant-time solishtirish (timing side-channel'дан himoya)
+  let hashBuf: Buffer;
+  try {
+    hashBuf = Buffer.from(hash, "hex");
+  } catch {
+    return null;
+  }
+  if (hashBuf.length !== computed.length || !timingSafeEqual(computed, hashBuf)) return null;
 
-  // Yangililik (freshness) tekshiruvi — 24 soat
-  const authDate = Number(params.get("auth_date") ?? 0);
-  if (authDate && Date.now() / 1000 - authDate > 86400) return null;
+  // Yangililik (freshness) — auth_date MAJBURIY, 24 soat
+  const authDate = Number(params.get("auth_date"));
+  if (!Number.isFinite(authDate) || authDate <= 0) return null;
+  if (Date.now() / 1000 - authDate > 86400) return null;
 
   const userRaw = params.get("user");
   if (!userRaw) return null;
