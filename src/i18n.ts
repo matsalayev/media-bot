@@ -177,6 +177,11 @@ const S: Record<string, Entry> = {
     ru: "Чтобы пожаловаться, сначала нужно купить контент.",
     en: "You must purchase the content before reporting it.",
   },
+  complaintTooLate: {
+    uz: "Shikoyat muddati o'tgan (sotib olganга {days} kundan ko'p bo'ldi).",
+    ru: "Срок жалобы истёк (прошло более {days} дн. с покупки).",
+    en: "The complaint window has closed (more than {days} days since purchase).",
+  },
   refundBuyer: {
     uz: "✅ «{title}» bo'yicha shikoyatingiz tasdiqlandi. {amount} USDT balansingizga qaytarildi (yechib olishingiz mumkin).",
     ru: "✅ Ваша жалоба по «{title}» подтверждена. {amount} USDT возвращено на ваш баланс (можно вывести).",

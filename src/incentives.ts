@@ -129,14 +129,16 @@ export async function buildMonthlyPool(periodYm: string): Promise<{ pool: number
   const c2creator = new Map(contents.map((c) => [c.id, c.creatorId]));
   const rows = await prisma.unlock.groupBy({
     by: ["contentId"],
-    _sum: { creatorEarned: true },
+    _sum: { creatorEarned: true, platformFee: true },
     where: { refunded: false, countsForTier: true, createdAt: { gte: start, lt: end } },
   });
   const monthQ = new Map<number, number>();
+  const monthFee = new Map<number, number>(); // har creator o'z komissiya hissasi (self-funding cheklovi)
   for (const r of rows) {
     const cid = c2creator.get(r.contentId);
     if (!cid) continue;
     monthQ.set(cid, (monthQ.get(cid) ?? 0) + (r._sum.creatorEarned ?? 0));
+    monthFee.set(cid, (monthFee.get(cid) ?? 0) + (r._sum.platformFee ?? 0));
   }
   if (!monthQ.size) return { pool: 0, grants: 0 };
 
@@ -155,7 +157,9 @@ export async function buildMonthlyPool(periodYm: string): Promise<{ pool: number
   const maturesAt = new Date(Date.now() + config.disputeWindowDays * 86400000);
   let grants = 0;
   for (const [cid, w] of weights) {
-    const amount = Math.floor((pool * w) / totalWeight);
+    // Self-funding cheklovi: creator o'z komissiya hissasidan ko'p bonus ololmaydi
+    // (Sybil wash-trading orqali boshqalar komissiyasini o'zlashtirolmaydi). Ortiqcha taqsimlanmaydi.
+    const amount = Math.min(Math.floor((pool * w) / totalWeight), monthFee.get(cid) ?? 0);
     if (amount <= 0) continue;
     await prisma.creatorBonus
       .create({

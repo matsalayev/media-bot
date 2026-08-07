@@ -261,7 +261,8 @@ export async function sendUnlockedVideo(buyerTelegramId: string, contentId: numb
 // ==================== Telegram Stars to'lovi ====================
 
 function starsShare(priceStars: number, sharePercent = config.creatorSharePercent): { creatorEarned: number; platformFee: number } {
-  const creatorEarned = Math.floor((priceStars * sharePercent) / 100);
+  const p = Math.min(Math.max(sharePercent, 0), 100); // ulush [0,100] — komissiya hech qachon manfiy bo'lmaydi
+  const creatorEarned = Math.floor((priceStars * p) / 100);
   return { creatorEarned, platformFee: priceStars - creatorEarned };
 }
 
@@ -296,10 +297,17 @@ export async function creatorStarsBalance(
 ): Promise<{ earned: number; reserved: number; available: number }> {
   const agg = await prisma.unlock.aggregate({ _sum: { creatorEarned: true }, where: { refunded: false, content: { creatorId: userId } } });
   const bonus = await creditedBonusStars(userId); // kreditlangan bonuslar ham yechiladi
-  const earned = (agg._sum.creatorEarned ?? 0) + bonus;
+  const earned = (agg._sum.creatorEarned ?? 0) + bonus; // jami (ko'rsatish uchun)
+  // YECHISH uchun faqat "pishgan" (nizolar oynasidan o'tgan, endi qaytarib bo'lmaydigan) sotuv daromadi
+  let maturedEarned = agg._sum.creatorEarned ?? 0;
+  if (config.disputeWindowDays > 0) {
+    const cutoff = new Date(Date.now() - config.disputeWindowDays * 86400000);
+    const m = await prisma.unlock.aggregate({ _sum: { creatorEarned: true }, where: { refunded: false, createdAt: { lte: cutoff }, content: { creatorId: userId } } });
+    maturedEarned = m._sum.creatorEarned ?? 0;
+  }
   const paid = await prisma.payout.aggregate({ _sum: { amountStars: true }, where: { userId, status: { in: ["requested", "processing", "paid"] } } });
   const reserved = paid._sum.amountStars ?? 0;
-  return { earned, reserved, available: earned - reserved };
+  return { earned, reserved, available: maturedEarned + bonus - reserved };
 }
 
 /**
@@ -326,10 +334,12 @@ export async function getCrmData(rangeDays?: number) {
   const earnedAllAgg = await prisma.unlock.aggregate({ _sum: { creatorEarned: true }, where: { refunded: false } });
   const reservedAllAgg = await prisma.payout.aggregate({ _sum: { amountStars: true }, where: { status: { in: ["requested", "processing", "paid"] } } });
 
+  const creditedBonusAllAgg = await prisma.creatorBonus.aggregate({ _sum: { amountStars: true }, where: { status: "credited" } });
   const totalStars = agg._sum.starsPaid ?? 0;
   const commissionStars = agg._sum.platformFee ?? 0;
   const creatorStars = agg._sum.creatorEarned ?? 0;
-  const undistributed = (earnedAllAgg._sum.creatorEarned ?? 0) - (reservedAllAgg._sum.amountStars ?? 0);
+  // Tarqatilmagan majburiyat = (sotuv daromadi + kreditlangan bonus) − band qilingan payout
+  const undistributed = (earnedAllAgg._sum.creatorEarned ?? 0) + (creditedBonusAllAgg._sum.amountStars ?? 0) - (reservedAllAgg._sum.amountStars ?? 0);
 
   // Kontent → creator xaritasi
   const contents = await prisma.content.findMany({ select: { id: true, creatorId: true, status: true } });
@@ -372,14 +382,17 @@ export async function getCrmData(rangeDays?: number) {
   const creatorIds = new Set<number>([...earnedAllByCreator.keys(), ...per.keys(), ...videosByCreator.keys()]);
   const users = await prisma.user.findMany({ where: { id: { in: [...creatorIds] } }, select: { id: true, telegramId: true, username: true, firstName: true, tier: true } });
   const uMap = new Map(users.map((u) => [u.id, u]));
-  // Kutilayotgan (hali kreditlanmagan) bonuslar creator bo'yicha
+  // Bonuslar creator bo'yicha (pending = kutilayotgan, credited = balansga qo'shilgan)
   const bonusRows = await prisma.creatorBonus.groupBy({ by: ["userId"], _sum: { amountStars: true }, where: { status: "pending" } });
   const pendingBonusByCreator = new Map(bonusRows.map((b) => [b.userId, b._sum.amountStars ?? 0]));
+  const creditedRows = await prisma.creatorBonus.groupBy({ by: ["userId"], _sum: { amountStars: true }, where: { status: "credited" } });
+  const creditedBonusByCreator = new Map(creditedRows.map((b) => [b.userId, b._sum.amountStars ?? 0]));
   const creators = [...creatorIds]
     .map((id) => {
       const u = uMap.get(id);
       const rangeE = per.get(id) ?? { sales: 0, starsEarned: 0 };
-      const available = (earnedAllByCreator.get(id) ?? 0) - (reservedByCreator.get(id) ?? 0);
+      // available = (sotuv daromadi + kreditlangan bonus) − band payout (creatorStarsBalance bilan mos)
+      const available = (earnedAllByCreator.get(id) ?? 0) + (creditedBonusByCreator.get(id) ?? 0) - (reservedByCreator.get(id) ?? 0);
       return {
         userId: id,
         telegramId: u?.telegramId ?? "",
@@ -568,8 +581,13 @@ export async function createComplaint(
   const user = await prisma.user.findUnique({ where: { telegramId: buyerTelegramId } });
   if (!user) return { ok: false, message: t(l, "startFirst") };
   const unlock = await prisma.unlock.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
-  if (!unlock || unlock.refunded || unlock.creatorEarnedUsdt <= 0) {
+  const isPaid = !!unlock && (unlock.creatorEarned > 0 || unlock.creatorEarnedUsdt > 0);
+  if (!unlock || unlock.refunded || !isPaid) {
     return { ok: false, message: t(l, "complaintNeedBuy") };
+  }
+  // Shikoyat muddati: faqat nizolar oynasi ichida (undan keyin daromad "pishadi" va bonus pool moliyalanadi)
+  if (config.disputeWindowDays > 0 && Date.now() - new Date(unlock.createdAt).getTime() > config.disputeWindowDays * 86400000) {
+    return { ok: false, message: t(l, "complaintTooLate", { days: config.disputeWindowDays }) };
   }
   const existing = await prisma.complaint.findUnique({ where: { userId_contentId: { userId: user.id, contentId } } });
   if (existing) return { ok: false, message: t(l, "complaintExists") };
