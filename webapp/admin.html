@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Media — CRM</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { --bg:#0b0b0f; --card:#16161d; --card2:#1e1e27; --line:rgba(255,255,255,.08); --txt:#fff; --dim:rgba(255,255,255,.55); --acc:#f5b301; --green:#37d67a; --red:#ff5a5a; }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,Segoe UI,Roboto,sans-serif; padding:14px 12px 40px; }
+    h1 { font-size:20px; margin:4px 4px 12px; }
+    .ranges { display:flex; gap:8px; margin-bottom:14px; }
+    .ranges button { flex:1; padding:9px 0; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--txt); font-size:13px; font-weight:600; }
+    .ranges button.on { background:var(--acc); color:#000; border-color:var(--acc); }
+    .cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+    .c { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 13px; }
+    .c.wide { grid-column:1/-1; }
+    .c .l { font-size:11px; color:var(--dim); margin-bottom:4px; }
+    .c .v { font-size:20px; font-weight:800; }
+    .c .s { font-size:12px; color:var(--dim); margin-top:2px; }
+    .c .v.green { color:var(--green); } .c .v.red { color:var(--red); } .c .v.acc { color:var(--acc); }
+    .sec { font-size:13px; color:var(--dim); margin:6px 4px 8px; text-transform:uppercase; letter-spacing:.04em; }
+    table { width:100%; border-collapse:collapse; font-size:12.5px; }
+    th,td { padding:9px 6px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+    th:first-child,td:first-child { text-align:left; }
+    th { color:var(--dim); font-weight:600; font-size:11px; position:sticky; top:0; background:var(--bg); }
+    .twrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line); border-radius:12px; }
+    .name { font-weight:700; } .u { color:var(--dim); font-size:11px; }
+    .muted { color:var(--dim); }
+    .err { text-align:center; color:var(--red); padding:40px 0; }
+    .load { text-align:center; color:var(--dim); padding:40px 0; }
+    .foot { text-align:center; color:var(--dim); font-size:11px; margin-top:16px; }
+  </style>
+</head>
+<body>
+  <h1>📊 CRM — Media</h1>
+  <div class="ranges" id="ranges">
+    <button data-d="1">Bugun</button>
+    <button data-d="7">7 kun</button>
+    <button data-d="30">30 kun</button>
+    <button data-d="0" class="on">Jami</button>
+  </div>
+  <div id="content"><div class="load">Yuklanmoqda…</div></div>
+  <div class="foot" id="foot"></div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+    const HEADERS = { "Content-Type": "application/json", "X-Init-Data": (tg && tg.initData) || "" };
+    let curDays = 0;
+    const content = document.getElementById("content");
+    const foot = document.getElementById("foot");
+    const nf = (n) => (Number(n) || 0).toLocaleString("en-US");
+    const usd = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    function card(l, v, s, cls) {
+      return '<div class="c"><div class="l">' + l + '</div><div class="v ' + (cls || "") + '">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : "") + '</div>';
+    }
+    function render(d) {
+      const t = d.totals, r = d.rates;
+      let html = '<div class="cards">';
+      html += card("Jami yig'ilgan ⭐", nf(t.totalStars) + " ⭐", usd(t.totalUsd), "acc");
+      html += card("Komissiya (" + t.blendedCommissionPct + "%)", nf(t.commissionStars) + " ⭐", usd(t.commissionUsd), "green");
+      html += card("Creatorlar topgani", nf(t.creatorStars) + " ⭐", usd(t.creatorUsd));
+      html += card("Sotuvlar", nf(t.sales), t.distinctBuyers + " xaridor");
+      html += card("Kutilayotgan payout", nf(t.pendingPayoutStars) + " ⭐", "yechish so'rovlari", t.pendingPayoutStars > 0 ? "red" : "");
+      html += card("Tarqatilmagan balans", nf(t.undistributedLiabilityStars) + " ⭐", usd(t.undistributedLiabilityUsd) + " · jami majburiyat");
+      html += '<div class="c wide"><div class="l">Boshqa</div><div class="s">To\'langan: ' + nf(t.paidOutStars) + ' ⭐ · Qaytarilgan: ' + nf(t.refundedStars) + ' ⭐ · Faol creatorlar: ' + t.activeCreators + '/' + t.totalCreators + ' · 1⭐≈' + usd(r.starUsd) + '</div></div>';
+      html += "</div>";
+
+      html += '<div class="sec">Creatorlar (' + d.creators.length + ")</div>";
+      if (!d.creators.length) {
+        html += '<div class="muted" style="text-align:center;padding:24px">Hali sotuv yo\'q.</div>';
+      } else {
+        html += '<div class="twrap"><table><thead><tr><th>Creator</th><th>🎬</th><th>Sotuv</th><th>⭐ Topgan</th><th>$</th><th>Mavjud ⭐</th><th>To\'langan ⭐</th><th>tgId</th></tr></thead><tbody>';
+        for (const c of d.creators) {
+          const nm = (c.firstName || c.username || c.telegramId || "—");
+          html += '<tr><td><div class="name">' + esc(nm) + '</div>' + (c.username ? '<div class="u">@' + esc(c.username) + '</div>' : '') + '</td>' +
+            '<td>' + c.videos + '</td><td>' + nf(c.sales) + '</td><td>' + nf(c.starsEarned) + '</td><td class="muted">' + usd(c.usdValue) + '</td>' +
+            '<td>' + nf(c.availableStars) + '</td><td class="muted">' + nf(c.paidStars) + '</td><td class="u">' + esc(c.telegramId) + '</td></tr>';
+        }
+        html += "</tbody></table></div>";
+      }
+      content.innerHTML = html;
+      foot.textContent = "Oralik: " + (d.range.days ? d.range.days + " kun" : "jami") + " · to'lov: " + r.platformMode;
+    }
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
+
+    async function load() {
+      content.innerHTML = '<div class="load">Yuklanmoqda…</div>';
+      try {
+        const res = await fetch("/api/admin/crm", { method: "POST", headers: HEADERS, body: JSON.stringify({ days: curDays }) });
+        if (res.status === 403) return void (content.innerHTML = '<div class="err">⛔ Faqat adminlar uchun.</div>');
+        if (!res.ok) return void (content.innerHTML = '<div class="err">Xatolik (' + res.status + ')</div>');
+        render(await res.json());
+      } catch (e) {
+        content.innerHTML = '<div class="err">Ulanishda xatolik</div>';
+      }
+    }
+    document.getElementById("ranges").addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      document.querySelectorAll("#ranges button").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on"); curDays = Number(b.dataset.d); load();
+    });
+    load();
+  </script>
+</body>
+</html>

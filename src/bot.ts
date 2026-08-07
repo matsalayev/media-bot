@@ -298,6 +298,122 @@ export async function creatorStarsBalance(
   return { earned, reserved, available: earned - reserved };
 }
 
+/**
+ * Admin CRM ma'lumoti: jami Stars, komissiya, creatorlar daromadi, $ qiymati + har creator kesimi.
+ * rangeDays: 1|7|30 (range-scoped metrikalar); undefined = jami. Live majburiyatlar doim all-time.
+ */
+export async function getCrmData(rangeDays?: number) {
+  const usd = config.starUsd;
+  const since = rangeDays && rangeDays > 0 ? new Date(Date.now() - rangeDays * 86400000) : undefined;
+  const rangeWhere = since ? { createdAt: { gte: since } } : {};
+
+  // Range-scoped umumiy (refunded emas)
+  const agg = await prisma.unlock.aggregate({
+    _sum: { starsPaid: true, platformFee: true, creatorEarned: true },
+    _count: true,
+    where: { refunded: false, ...rangeWhere },
+  });
+  const buyers = await prisma.unlock.findMany({ where: { refunded: false, ...rangeWhere }, select: { userId: true }, distinct: ["userId"] });
+  const refundedAgg = await prisma.unlock.aggregate({ _sum: { starsPaid: true }, where: { refunded: true, ...rangeWhere } });
+  const paidAgg = await prisma.payout.aggregate({ _sum: { amountStars: true }, where: { status: "paid", ...rangeWhere } });
+
+  // Live majburiyatlar (all-time)
+  const pendingAgg = await prisma.payout.aggregate({ _sum: { amountStars: true }, where: { status: { in: ["requested", "processing"] } } });
+  const earnedAllAgg = await prisma.unlock.aggregate({ _sum: { creatorEarned: true }, where: { refunded: false } });
+  const reservedAllAgg = await prisma.payout.aggregate({ _sum: { amountStars: true }, where: { status: { in: ["requested", "processing", "paid"] } } });
+
+  const totalStars = agg._sum.starsPaid ?? 0;
+  const commissionStars = agg._sum.platformFee ?? 0;
+  const creatorStars = agg._sum.creatorEarned ?? 0;
+  const undistributed = (earnedAllAgg._sum.creatorEarned ?? 0) - (reservedAllAgg._sum.amountStars ?? 0);
+
+  // Kontent → creator xaritasi
+  const contents = await prisma.content.findMany({ select: { id: true, creatorId: true, status: true } });
+  const c2creator = new Map<number, number | null>();
+  const videosByCreator = new Map<number, number>();
+  for (const c of contents) {
+    c2creator.set(c.id, c.creatorId ?? null);
+    if (c.creatorId && c.status === "published") videosByCreator.set(c.creatorId, (videosByCreator.get(c.creatorId) ?? 0) + 1);
+  }
+
+  // Range-scoped: creator bo'yicha sotuv + daromad (contentId groupBy → creatorga yig'amiz)
+  const byContent = await prisma.unlock.groupBy({ by: ["contentId"], _sum: { creatorEarned: true }, _count: true, where: { refunded: false, ...rangeWhere } });
+  const per = new Map<number, { sales: number; starsEarned: number }>();
+  for (const r of byContent) {
+    const cid = c2creator.get(r.contentId);
+    if (!cid) continue;
+    const e = per.get(cid) ?? { sales: 0, starsEarned: 0 };
+    e.sales += r._count;
+    e.starsEarned += r._sum.creatorEarned ?? 0;
+    per.set(cid, e);
+  }
+  // All-time daromad (available balans uchun)
+  const byContentAll = await prisma.unlock.groupBy({ by: ["contentId"], _sum: { creatorEarned: true }, where: { refunded: false } });
+  const earnedAllByCreator = new Map<number, number>();
+  for (const r of byContentAll) {
+    const cid = c2creator.get(r.contentId);
+    if (!cid) continue;
+    earnedAllByCreator.set(cid, (earnedAllByCreator.get(cid) ?? 0) + (r._sum.creatorEarned ?? 0));
+  }
+  // Payout (all-time) creator bo'yicha
+  const payoutRows = await prisma.payout.groupBy({ by: ["userId", "status"], _sum: { amountStars: true } });
+  const paidByCreator = new Map<number, number>();
+  const reservedByCreator = new Map<number, number>();
+  for (const r of payoutRows) {
+    const amt = r._sum.amountStars ?? 0;
+    if (r.status === "paid") paidByCreator.set(r.userId, (paidByCreator.get(r.userId) ?? 0) + amt);
+    if (["requested", "processing", "paid"].includes(r.status)) reservedByCreator.set(r.userId, (reservedByCreator.get(r.userId) ?? 0) + amt);
+  }
+
+  const creatorIds = new Set<number>([...earnedAllByCreator.keys(), ...per.keys(), ...videosByCreator.keys()]);
+  const users = await prisma.user.findMany({ where: { id: { in: [...creatorIds] } }, select: { id: true, telegramId: true, username: true, firstName: true } });
+  const uMap = new Map(users.map((u) => [u.id, u]));
+  const creators = [...creatorIds]
+    .map((id) => {
+      const u = uMap.get(id);
+      const rangeE = per.get(id) ?? { sales: 0, starsEarned: 0 };
+      const available = (earnedAllByCreator.get(id) ?? 0) - (reservedByCreator.get(id) ?? 0);
+      return {
+        userId: id,
+        telegramId: u?.telegramId ?? "",
+        username: u?.username ?? null,
+        firstName: u?.firstName ?? null,
+        videos: videosByCreator.get(id) ?? 0,
+        sales: rangeE.sales,
+        starsEarned: rangeE.starsEarned,
+        usdValue: Math.round(rangeE.starsEarned * usd * 100) / 100,
+        availableStars: Math.max(0, available),
+        paidStars: paidByCreator.get(id) ?? 0,
+      };
+    })
+    .sort((a, b) => b.starsEarned - a.starsEarned);
+
+  const round2 = (n: number) => Math.round(n * usd * 100) / 100;
+  return {
+    range: { days: rangeDays ?? 0, label: rangeDays ? `${rangeDays}d` : "all" },
+    rates: { starUsd: usd, creatorSharePercent: config.creatorSharePercent, minWithdrawStars: config.minWithdrawStars, platformMode: config.paymentMode },
+    totals: {
+      totalStars,
+      totalUsd: round2(totalStars),
+      commissionStars,
+      commissionUsd: round2(commissionStars),
+      creatorStars,
+      creatorUsd: round2(creatorStars),
+      blendedCommissionPct: totalStars > 0 ? Math.round((commissionStars / totalStars) * 1000) / 10 : 0,
+      sales: agg._count ?? 0,
+      distinctBuyers: buyers.length,
+      refundedStars: refundedAgg._sum.starsPaid ?? 0,
+      paidOutStars: paidAgg._sum.amountStars ?? 0,
+      pendingPayoutStars: pendingAgg._sum.amountStars ?? 0,
+      undistributedLiabilityStars: Math.max(0, undistributed),
+      undistributedLiabilityUsd: round2(Math.max(0, undistributed)),
+      activeCreators: per.size,
+      totalCreators: videosByCreator.size,
+    },
+    creators,
+  };
+}
+
 /** Stars yechish so'rovi — admin QO'LDA tarqatadi (Telegram'da botdan userga Stars yuborish API'si yo'q). */
 export async function requestStarsPayout(telegramId: string, lang?: string): Promise<{ ok: boolean; message: string }> {
   const l = normLang(lang);
@@ -1016,6 +1132,11 @@ bot.on("message:successful_payment", async (ctx) => {
   if (!content || !content.videoFileId) return;
   const user = await prisma.user.findUnique({ where: { telegramId: String(ctx.from.id) } });
   if (!user) return;
+  // O'z kontentini sotib olsa — daromad YOZILMAYDI (statistika/tier shishmasin), lekin video beriladi
+  if (content.creatorId === user.id) {
+    await bot.api.sendVideo(String(ctx.from.id), content.videoFileId, { caption: `🎬 ${content.title}`, supports_streaming: true }).catch(() => {});
+    return;
+  }
   const stars = sp.total_amount;
   const { creatorEarned, platformFee } = starsShare(stars);
   await recordUnlock(user.id, contentId, {
@@ -1052,6 +1173,31 @@ bot.callbackQuery(/^spayout_no:(\d+)$/, async (ctx) => {
   await prisma.payout.updateMany({ where: { id, status: { in: ["requested", "processing"] } }, data: { status: "rejected" } });
   await ctx.answerCallbackQuery("Rad etildi");
   await ctx.editMessageReplyMarkup().catch(() => {});
+});
+
+// Admin CRM — tez xulosa + to'liq dashboard tugmasi
+bot.command("crm", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const d = await getCrmData();
+  const t = d.totals;
+  const money = (u: number) => "$" + u.toFixed(2);
+  let out = "📊 CRM (jami)\n\n";
+  out += `💰 Jami yig'ilgan: ${t.totalStars} ⭐ (${money(t.totalUsd)})\n`;
+  out += `🏦 Komissiya (${t.blendedCommissionPct}%): ${t.commissionStars} ⭐ (${money(t.commissionUsd)})\n`;
+  out += `👥 Creatorlar topgani: ${t.creatorStars} ⭐ (${money(t.creatorUsd)})\n`;
+  out += `🛒 Sotuvlar: ${t.sales} · ${t.distinctBuyers} xaridor\n`;
+  out += `⏳ Kutilayotgan payout: ${t.pendingPayoutStars} ⭐\n`;
+  out += `👛 Tarqatilmagan balans: ${t.undistributedLiabilityStars} ⭐ (${money(t.undistributedLiabilityUsd)})\n`;
+  out += `🎭 Faol creatorlar: ${t.activeCreators}/${t.totalCreators}`;
+  if (d.creators.length) {
+    out += "\n\n🏆 Top creatorlar:\n";
+    d.creators.slice(0, 5).forEach((c, i) => {
+      out += `${i + 1}. ${c.firstName ?? c.username ?? c.telegramId}: ${c.starsEarned} ⭐ (${c.sales} sotuv)\n`;
+    });
+  }
+  const url = config.webappUrl ? config.webappUrl.replace(/\/$/, "") + "/admin" : "";
+  const kb = url ? new InlineKeyboard().webApp("📊 To'liq CRM panel", url) : undefined;
+  await ctx.reply(out, kb ? { reply_markup: kb } : {});
 });
 
 // Bot kanal/guruxga admin qilinganda — storage kanal ID'sini adminlarga yuboradi
