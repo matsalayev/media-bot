@@ -9,7 +9,7 @@ import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
 import { s3Enabled, presignReelUrl } from "./storage";
 import { normLang } from "./i18n";
-import { bot, deliverContent, sendUnlockedVideo, createContent, createComplaint, createReport, assertCanUpload, createStarsInvoice, creatorStarsBalance, requestStarsPayout, getCrmData } from "./bot";
+import { bot, deliverContent, sendUnlockedVideo, createContent, createComplaint, createReport, assertCanUpload, createStarsInvoice, creatorStarsBalance, requestStarsPayout, getCrmData, getUsersData } from "./bot";
 import { usdtToStars } from "./pricing";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
@@ -69,6 +69,14 @@ export function buildServer() {
     const daysRaw = Number((req.body as { days?: number })?.days);
     const days = [1, 7, 30].includes(daysRaw) ? daysRaw : undefined; // undefined = jami
     return getCrmData(days);
+  });
+
+  // ---- Admin: foydalanuvchilar ro'yxati ----
+  app.post("/api/admin/users", async (req, reply) => {
+    const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+    if (!tg) return reply.code(401).send({ error: "unauthorized" });
+    if (!config.adminIds.includes(String(tg.id))) return reply.code(403).send({ error: "forbidden" });
+    return getUsersData();
   });
 
   // ---- Reels feed ----

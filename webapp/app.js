@@ -172,6 +172,14 @@ function usd(n) {
 
 // ---------------- Tab boshqaruvi ----------------
 let currentTab = "reels";
+let BOT_USERNAME = "";
+// ➕ bosilganда ilova UI emas — botga /upload boshlanadi (deep-link start=upload)
+function startUploadInChat() {
+  const url = BOT_USERNAME ? "https://t.me/" + BOT_USERNAME + "?start=upload" : "";
+  if (url && tg && tg.openTelegramLink) tg.openTelegramLink(url);
+  else if (url) window.open(url, "_blank");
+  else showTab("add"); // fallback: ilova ichidagi yuklash
+}
 function showTab(name) {
   currentTab = name;
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
@@ -182,7 +190,12 @@ function showTab(name) {
   if (name === "earning") renderEarning();
   if (name === "profile") renderProfile();
 }
-document.querySelectorAll("#nav .nav-item").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+document.querySelectorAll("#nav .nav-item").forEach((b) =>
+  b.addEventListener("click", () => {
+    if (b.dataset.tab === "add") startUploadInChat(); // ➕ → chatда /upload
+    else showTab(b.dataset.tab);
+  }),
+);
 document.getElementById("resetBtn").addEventListener("click", () => load()); // boshiga qaytish + yangilash
 
 // ---------------- Reels ----------------
@@ -651,6 +664,7 @@ async function load(focus) {
     feed.innerHTML = '<div class="empty">' + L("connErr") + "</div>";
     return;
   }
+  if (data.botUsername) BOT_USERNAME = data.botUsername;
   if (data.lang) {
     LANG = data.lang;
     localize();

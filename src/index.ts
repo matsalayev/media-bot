@@ -75,6 +75,7 @@ async function main() {
     { command: "admin", description: "Admin panel — barcha buyruqlar" },
     { command: "add", description: "Video qo'shish (admin)" },
     { command: "crm", description: "CRM — Stars, daromad, komissiya" },
+    { command: "users", description: "Foydalanuvchilar ro'yxati" },
     { command: "balance", description: "Balans + komissiya + hot-wallet" },
     { command: "hotwallet", description: "Hot-wallet manzili/balansi" },
     { command: "payouts", description: "Payout tarixi" },

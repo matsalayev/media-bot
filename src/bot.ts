@@ -430,6 +430,38 @@ export async function getCrmData(rangeDays?: number) {
   };
 }
 
+/** Admin: barcha foydalanuvchilar ro'yxati (xarid/video/daraja/ban bilan). */
+export async function getUsersData(limit = 500) {
+  const total = await prisma.user.count();
+  const users = await prisma.user.findMany({
+    orderBy: { id: "desc" },
+    take: limit,
+    select: { id: true, telegramId: true, username: true, firstName: true, createdAt: true, isBanned: true, isAdmin: true, tier: true },
+  });
+  const ids = users.map((u) => u.id);
+  const buys = await prisma.unlock.groupBy({ by: ["userId"], _sum: { starsPaid: true }, _count: true, where: { userId: { in: ids }, starsPaid: { gt: 0 } } });
+  const spentMap = new Map(buys.map((b) => [b.userId, { spent: b._sum.starsPaid ?? 0, count: b._count }]));
+  const vids = await prisma.content.groupBy({ by: ["creatorId"], _count: true, where: { creatorId: { in: ids }, status: "published" } });
+  const vidMap = new Map(vids.map((v) => [v.creatorId, v._count]));
+  return {
+    total,
+    shown: users.length,
+    users: users.map((u) => ({
+      userId: u.id,
+      telegramId: u.telegramId,
+      username: u.username,
+      firstName: u.firstName,
+      joined: u.createdAt,
+      banned: u.isBanned,
+      admin: u.isAdmin,
+      tier: u.tier,
+      videos: vidMap.get(u.id) ?? 0,
+      purchases: spentMap.get(u.id)?.count ?? 0,
+      spentStars: spentMap.get(u.id)?.spent ?? 0,
+    })),
+  };
+}
+
 /** Stars yechish so'rovi — admin QO'LDA tarqatadi (Telegram'da botdan userga Stars yuborish API'si yo'q). */
 export async function requestStarsPayout(telegramId: string, lang?: string): Promise<{ ok: boolean; message: string }> {
   const l = normLang(lang);
@@ -758,10 +790,17 @@ bot.command("start", async (ctx) => {
     first_name: ctx.from.first_name,
     language_code: ctx.from.language_code,
   });
+  const payload = (ctx.match ?? "").toString().trim();
   if (!user.lang) {
     await ctx.reply("Tilni tanlang / Выберите язык / Choose language:", { reply_markup: langKeyboard() });
   } else if (!user.acceptedTerms) {
     await sendTerms(ctx, normLang(user.lang));
+  } else if (payload === "upload") {
+    // Mini App'даги ➕ tugmasi — yuklashni shu chatда boshlaymiz
+    ctx.session.step = "reel";
+    ctx.session.mode = "creator";
+    ctx.session.draft = {};
+    await ctx.reply(t(normLang(user.lang), "uploadStart"));
   } else {
     await sendWelcome(ctx, normLang(user.lang));
   }
@@ -1267,6 +1306,21 @@ bot.command("crm", async (ctx) => {
   }
   const url = config.webappUrl ? config.webappUrl.replace(/\/$/, "") + "/admin" : "";
   const kb = url ? new InlineKeyboard().webApp("📊 To'liq CRM panel", url) : undefined;
+  await ctx.reply(out, kb ? { reply_markup: kb } : {});
+});
+
+// Foydalanuvchilar (admin) — qisqa ro'yxat + panel tugmasi
+bot.command("users", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const d = await getUsersData(15);
+  let out = `👥 Foydalanuvchilar: ${d.total}\n\nSo'nggilar:\n`;
+  d.users.slice(0, 15).forEach((u) => {
+    const nm = u.username ? "@" + u.username : u.firstName || u.telegramId;
+    const badge = u.admin ? " 🛠" : u.banned ? " ⛔" : "";
+    out += `• ${nm}${badge} — 🎬${u.videos} · 🛒${u.purchases} · ${u.spentStars}⭐\n`;
+  });
+  const url = config.webappUrl ? config.webappUrl.replace(/\/$/, "") + "/admin" : "";
+  const kb = url ? new InlineKeyboard().webApp("👥 To'liq ro'yxat", url) : undefined;
   await ctx.reply(out, kb ? { reply_markup: kb } : {});
 });
 

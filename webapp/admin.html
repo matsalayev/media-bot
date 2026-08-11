@@ -34,7 +34,11 @@
   </style>
 </head>
 <body>
-  <h1>📊 CRM — Media</h1>
+  <h1>📊 Media — Admin</h1>
+  <div class="ranges" id="views">
+    <button data-v="crm" class="on">📊 Statistika</button>
+    <button data-v="users">👥 Foydalanuvchilar</button>
+  </div>
   <div class="ranges" id="ranges">
     <button data-d="1">Bugun</button>
     <button data-d="7">7 kun</button>
@@ -101,6 +105,43 @@
         content.innerHTML = '<div class="err">Ulanishda xatolik</div>';
       }
     }
+
+    const tierE = { bronze: "🥉", silver: "🥈", gold: "🥇", platinum: "💎", diamond: "👑" };
+    function fmtDate(s) { try { return new Date(s).toISOString().slice(0, 10); } catch (e) { return "—"; } }
+    function renderUsers(d) {
+      let html = '<div class="cards"><div class="c wide"><div class="l">Foydalanuvchilar</div><div class="v acc">' + nf(d.total) + '</div><div class="s">ko\'rsatilyapti: ' + d.shown + '</div></div></div>';
+      html += '<div class="twrap"><table><thead><tr><th>Foydalanuvchi</th><th>Daraja</th><th>🎬</th><th>Xarid</th><th>Sarflagan ⭐</th><th>Qo\'shilgan</th><th>tgId</th><th>Holat</th></tr></thead><tbody>';
+      for (const u of d.users) {
+        const nm = (u.firstName || u.username || u.telegramId || "—");
+        html += '<tr><td><div class="name">' + esc(nm) + '</div>' + (u.username ? '<div class="u">@' + esc(u.username) + '</div>' : '') + '</td>' +
+          '<td>' + (u.videos > 0 ? (tierE[u.tier] || "🥉") : "—") + '</td><td>' + u.videos + '</td><td>' + nf(u.purchases) + '</td><td>' + nf(u.spentStars) + '</td>' +
+          '<td class="u">' + fmtDate(u.joined) + '</td><td class="u">' + esc(u.telegramId) + '</td>' +
+          '<td>' + (u.admin ? "🛠 admin" : u.banned ? "⛔ ban" : "✅") + '</td></tr>';
+      }
+      html += "</tbody></table></div>";
+      content.innerHTML = html;
+      foot.textContent = "Jami " + nf(d.total) + " foydalanuvchi";
+    }
+    async function loadUsers() {
+      content.innerHTML = '<div class="load">Yuklanmoqda…</div>';
+      try {
+        const res = await fetch("/api/admin/users", { method: "POST", headers: HEADERS, body: "{}" });
+        if (res.status === 403) return void (content.innerHTML = '<div class="err">⛔ Faqat adminlar uchun.</div>');
+        if (!res.ok) return void (content.innerHTML = '<div class="err">Xatolik (' + res.status + ')</div>');
+        renderUsers(await res.json());
+      } catch (e) {
+        content.innerHTML = '<div class="err">Ulanishda xatolik</div>';
+      }
+    }
+
+    let curView = "crm";
+    document.getElementById("views").addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      document.querySelectorAll("#views button").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on"); curView = b.dataset.v;
+      document.getElementById("ranges").style.display = curView === "crm" ? "flex" : "none";
+      if (curView === "crm") load(); else loadUsers();
+    });
     document.getElementById("ranges").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
       document.querySelectorAll("#ranges button").forEach((x) => x.classList.remove("on"));
