@@ -297,4 +297,5 @@ model Payout {
   user User @relation(fields: [userId], references: [id])
 
   @@index([status])
+  @@index([userId])
 }

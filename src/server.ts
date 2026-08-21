@@ -3,7 +3,6 @@ import multipart from "@fastify/multipart";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Readable } from "stream";
-import { randomUUID } from "crypto";
 import { config } from "./config";
 import { prisma } from "./db";
 import { validateInitData, TgUser } from "./auth";
