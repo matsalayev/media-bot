@@ -198,6 +198,7 @@ export function buildServer() {
 
   // ---- Ochish / yetkazish (bepul yoki allaqachon ochilgan) ----
   app.post("/api/unlock", async (req, reply) => {
+    if (rateLimit(rlKey(req, "unlock"), 10, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
@@ -250,6 +251,7 @@ export function buildServer() {
 
   // ---- Like (toggle) ----
   app.post("/api/like", async (req, reply) => {
+    if (rateLimit(rlKey(req, "like"), 20, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
@@ -273,6 +275,7 @@ export function buildServer() {
 
   // ---- Save (toggle) ----
   app.post("/api/save", async (req, reply) => {
+    if (rateLimit(rlKey(req, "save"), 20, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
@@ -296,6 +299,7 @@ export function buildServer() {
 
   // ---- Share (deep link + hisob) ----
   app.post("/api/share", async (req, reply) => {
+    if (rateLimit(rlKey(req, "share"), 10, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
@@ -331,6 +335,7 @@ export function buildServer() {
 
   // ---- Ko'rishni hisoblash (auth + validatsiya + dedup: user boshiga bir marta) ----
   app.post("/api/view", async (req, reply) => {
+    if (rateLimit(rlKey(req, "view"), 60, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
@@ -351,6 +356,7 @@ export function buildServer() {
 
   // ---- Profil: balans, mening kontentim, saqlanganlar ----
   app.post("/api/me", async (req, reply) => {
+    if (rateLimit(rlKey(req, "me"), 15, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const user = await getUser(tg);
@@ -432,6 +438,7 @@ export function buildServer() {
 
   // ---- Kontentni tahrirlash (faqat egasi): nom / narx ----
   app.post("/api/content/update", async (req, reply) => {
+    if (rateLimit(rlKey(req, "update"), 10, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const body = (req.body ?? {}) as { contentId?: number; title?: string; priceUsdt?: number };
@@ -454,6 +461,7 @@ export function buildServer() {
 
   // ---- Kontentni o'chirish (faqat egasi): soft-delete ----
   app.post("/api/content/delete", async (req, reply) => {
+    if (rateLimit(rlKey(req, "delete"), 5, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);

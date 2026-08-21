@@ -37,3 +37,10 @@ export function startIncentiveJobs(intervalMs = 60 * 60 * 1000): void {
   void tick();
   console.log("🏆 DARAJA rag'batlantirish jobs (daraja + oylik bonus pool).");
 }
+
+export function stopIncentiveJobs(): void {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+}

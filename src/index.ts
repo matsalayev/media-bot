@@ -4,7 +4,7 @@ import { bot, notifyAdmins } from "./bot";
 import { tronEnabled, hotWalletAddress } from "./tron";
 import { buildServer } from "./server";
 import { startPaymentWatcher } from "./watcher";
-import { startIncentiveJobs } from "./jobs";
+import { startIncentiveJobs, stopIncentiveJobs } from "./jobs";
 
 // Bitta ham stray promise butun jarayonni o'ldirmasin; adminni ogohlantiramiz
 process.on("unhandledRejection", (reason) => {
@@ -101,6 +101,22 @@ async function main() {
   await bot.start({
     onStart: (bi) => console.log(`🤖 Bot @${bi.username} ishga tushdi (long polling)`),
   });
+
+  // 4) Graceful shutdown — SIGTERM/SIGINT kelganda toza to'xtatish
+  let stopping = false;
+  const shutdown = async (signal: string) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`\n🛑 ${signal} — to'xtatilmoqda…`);
+    stopIncentiveJobs();
+    bot.stop();
+    await app.close().catch(() => {});
+    await prisma.$disconnect().catch(() => {});
+    console.log("✅ Toza to'xtatildi.");
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main().catch((e) => {
