@@ -1,0 +1,11 @@
+[Unit]
+Description=Kino SQLite backup to S3
+
+[Service]
+Type=oneshot
+User=kino
+Group=kino
+WorkingDirectory=/opt/kino
+ExecStart=/usr/bin/node dist/backup.js
+EnvironmentFile=/opt/kino/.env
+Environment=NODE_ENV=production

@@ -1,6 +1,7 @@
 // DARAJA fon ishlari: soatlik daraja qayta hisoblash + bonus maturation + oylik pool.
 // (Startда darhol ishga tushib, mavjud creatorlar darajasini "backfill" ham qiladi.)
 import { config } from "./config";
+import { prisma } from "./db";
 import { recomputeAllTiers, matureBonuses, buildMonthlyPool, ym } from "./incentives";
 
 let timer: NodeJS.Timeout | null = null;
@@ -20,6 +21,7 @@ async function tick(): Promise<void> {
       const prior = new Date(now.getFullYear(), now.getMonth() - 1, 15);
       await buildMonthlyPool(ym(prior)).catch((e) => console.warn("buildPool:", (e as Error).message));
     }
+    await prisma.$executeRawUnsafe("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
   } finally {
     busy = false;
   }

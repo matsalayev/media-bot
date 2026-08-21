@@ -82,9 +82,10 @@ export const config = {
 };
 
 export function assertBotConfig(): void {
-  if (!config.botToken) {
-    throw new Error(
-      "BOT_TOKEN o'rnatilmagan. .env fayliga @BotFather'dan olingan tokenni qo'shing.",
-    );
+  const missing: string[] = [];
+  if (!config.botToken) missing.push("BOT_TOKEN");
+  if (!config.adminIds.length) missing.push("ADMIN_IDS");
+  if (missing.length) {
+    throw new Error(`Muhim env o'zgaruvchilar o'rnatilmagan: ${missing.join(", ")}. .env faylini tekshiring.`);
   }
 }

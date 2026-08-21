@@ -47,7 +47,7 @@ function botUsername(): string {
 }
 
 export function buildServer() {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: true });
   app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 2 } });
 
   // ---- Mini App statik fayllari ----
@@ -59,7 +59,14 @@ export function buildServer() {
   app.get("/app.js", serveFile("app.js", "application/javascript; charset=utf-8"));
   app.get("/style.css", serveFile("style.css", "text/css; charset=utf-8"));
   app.get("/admin", serveFile("admin.html", "text/html; charset=utf-8"));
-  app.get("/health", async () => ({ ok: true }));
+  app.get("/health", async (_, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return { ok: true, uptime: process.uptime() };
+    } catch {
+      return reply.code(503).send({ ok: false });
+    }
+  });
 
   // ---- Admin CRM (faqat adminlar; initData + isAdmin) ----
   app.post("/api/admin/crm", async (req, reply) => {

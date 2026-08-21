@@ -1,0 +1,18 @@
+[Unit]
+Description=Kino Telegram Bot + Mini App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kino
+Group=kino
+WorkingDirectory=/opt/kino
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=3
+EnvironmentFile=/opt/kino/.env
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
