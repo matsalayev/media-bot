@@ -92,7 +92,7 @@
       content.innerHTML = html;
       foot.textContent = "Oralik: " + (d.range.days ? d.range.days + " kun" : "jami") + " · to'lov: " + r.platformMode;
     }
-    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])); }
 
     async function load() {
       content.innerHTML = '<div class="load">Yuklanmoqda…</div>';

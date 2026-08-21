@@ -1,6 +1,7 @@
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import multipart from "@fastify/multipart";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
+import { createHash } from "crypto";
 import { join } from "path";
 import { Readable } from "stream";
 import { config } from "./config";
@@ -12,6 +13,48 @@ import { bot, deliverContent, sendUnlockedVideo, createContent, createComplaint,
 import { usdtToStars } from "./pricing";
 
 const WEBAPP_DIR = join(__dirname, "..", "webapp");
+
+// ---- Statik fayllarni bir marta o'qib xotiraga olish ----
+function loadStatic(file: string): { buf: Buffer; etag: string } | null {
+  const p = join(WEBAPP_DIR, file);
+  if (!existsSync(p)) return null;
+  const buf = readFileSync(p);
+  const etag = '"' + createHash("md5").update(buf).digest("hex") + '"';
+  return { buf, etag };
+}
+const STATIC_FILES: Record<string, { buf: Buffer; etag: string; type: string }> = {};
+for (const [file, type] of [
+  ["index.html", "text/html; charset=utf-8"],
+  ["app.js", "application/javascript; charset=utf-8"],
+  ["style.css", "text/css; charset=utf-8"],
+  ["admin.html", "text/html; charset=utf-8"],
+] as const) {
+  const s = loadStatic(file);
+  if (s) STATIC_FILES["/" + (file === "index.html" ? "" : file === "admin.html" ? "admin" : file)] = { ...s, type };
+}
+
+// ---- Rate limiter (in-memory, user/IP asosida) ----
+const rlBuckets = new Map<string, { count: number; reset: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rlBuckets) if (v.reset < now) rlBuckets.delete(k);
+}, 60_000);
+
+function rateLimit(key: string, maxPerWindow: number, windowMs: number): boolean {
+  const now = Date.now();
+  let b = rlBuckets.get(key);
+  if (!b || b.reset < now) {
+    b = { count: 0, reset: now + windowMs };
+    rlBuckets.set(key, b);
+  }
+  b.count++;
+  return b.count > maxPerWindow;
+}
+
+function rlKey(req: FastifyRequest, prefix: string): string {
+  const tg = validateInitData((req.headers["x-init-data"] as string) || "");
+  return prefix + ":" + (tg?.id || req.ip);
+}
 
 async function reelSrc(c: { reelUrl: string | null; reelFileId: string | null; id: number }): Promise<string> {
   if (c.reelUrl) {
@@ -49,15 +92,25 @@ export function buildServer() {
   const app = Fastify({ logger: true });
   app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 2 } });
 
-  // ---- Mini App statik fayllari ----
-  const serveFile = (file: string, type: string) => (_req: FastifyRequest, reply: FastifyReply) => {
-    reply.header("Content-Type", type);
-    reply.send(readFileSync(join(WEBAPP_DIR, file)));
-  };
-  app.get("/", serveFile("index.html", "text/html; charset=utf-8"));
-  app.get("/app.js", serveFile("app.js", "application/javascript; charset=utf-8"));
-  app.get("/style.css", serveFile("style.css", "text/css; charset=utf-8"));
-  app.get("/admin", serveFile("admin.html", "text/html; charset=utf-8"));
+  // ---- Xavfsizlik headerlari ----
+  app.addHook("onRequest", (_req, reply, done) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "SAMEORIGIN");
+    reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    done();
+  });
+
+  // ---- Mini App statik fayllari (xotiradan, ETag + Cache-Control) ----
+  for (const [route, entry] of Object.entries(STATIC_FILES)) {
+    app.get(route, (req, reply) => {
+      if (req.headers["if-none-match"] === entry.etag) return reply.code(304).send();
+      reply.header("Content-Type", entry.type);
+      reply.header("ETag", entry.etag);
+      const isHtml = entry.type.startsWith("text/html");
+      reply.header("Cache-Control", isHtml ? "no-cache" : "public, max-age=86400, immutable");
+      return reply.send(entry.buf);
+    });
+  }
   app.get("/health", async (_, reply) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -86,7 +139,8 @@ export function buildServer() {
   });
 
   // ---- Reels feed ----
-  app.post("/api/reels", async (req) => {
+  app.post("/api/reels", async (req, reply) => {
+    if (rateLimit(rlKey(req, "reels"), 30, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     const body = (req.body ?? {}) as { focus?: number };
     let userId: number | null = null;
@@ -167,6 +221,7 @@ export function buildServer() {
 
   // ---- Sotib olish — Telegram Stars invoice (Mini App tg.openInvoice bilan ochadi) ----
   app.post("/api/buy", async (req, reply) => {
+    if (rateLimit(rlKey(req, "buy"), 10, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const contentId = Number((req.body as { contentId?: number })?.contentId);
@@ -252,6 +307,7 @@ export function buildServer() {
 
   // ---- Aldov shikoyati (sotib olingan pullik kontent) ----
   app.post("/api/complaint", async (req, reply) => {
+    if (rateLimit(rlKey(req, "complaint"), 5, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const body = (req.body ?? {}) as { contentId?: number; reason?: string };
@@ -263,6 +319,7 @@ export function buildServer() {
 
   // ---- Umumiy shikoyat (noqonuniy/nomaqbul kontent) — istalgan tomoshabin ----
   app.post("/api/report", async (req, reply) => {
+    if (rateLimit(rlKey(req, "report"), 5, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const body = (req.body ?? {}) as { contentId?: number; category?: string; reason?: string };
@@ -427,6 +484,7 @@ export function buildServer() {
 
   // ---- Yechish so'rovi (Stars) — admin qo'lda tarqatadi ----
   app.post("/api/withdraw", async (req, reply) => {
+    if (rateLimit(rlKey(req, "withdraw"), 3, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const u = await prisma.user.findUnique({ where: { telegramId: tg.id } });
@@ -436,6 +494,7 @@ export function buildServer() {
 
   // ---- Video yuklash (Mini App, multipart) ----
   app.post("/api/upload", async (req, reply) => {
+    if (rateLimit(rlKey(req, "upload"), 5, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     const upUser = await prisma.user.findUnique({ where: { telegramId: tg.id } });
