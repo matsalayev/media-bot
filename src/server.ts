@@ -108,6 +108,7 @@ export function buildServer() {
       reply.header("ETag", entry.etag);
       const isHtml = entry.type.startsWith("text/html");
       reply.header("Cache-Control", isHtml ? "no-cache" : "public, max-age=86400, immutable");
+      if (isHtml) reply.header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline'; media-src 'self' blob: https:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
       return reply.send(entry.buf);
     });
   }
@@ -122,6 +123,7 @@ export function buildServer() {
 
   // ---- Admin CRM (faqat adminlar; initData + isAdmin) ----
   app.post("/api/admin/crm", async (req, reply) => {
+    if (rateLimit(rlKey(req, "admin"), 20, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     if (!config.adminIds.includes(String(tg.id))) return reply.code(403).send({ error: "forbidden" });
@@ -132,6 +134,7 @@ export function buildServer() {
 
   // ---- Admin: foydalanuvchilar ro'yxati ----
   app.post("/api/admin/users", async (req, reply) => {
+    if (rateLimit(rlKey(req, "admin"), 20, 60_000)) return reply.code(429).send({ error: "too many requests" });
     const tg = validateInitData((req.headers["x-init-data"] as string) || "");
     if (!tg) return reply.code(401).send({ error: "unauthorized" });
     if (!config.adminIds.includes(String(tg.id))) return reply.code(403).send({ error: "forbidden" });
@@ -535,6 +538,7 @@ export function buildServer() {
 
   // ---- Reel media proxy (S3 sozlanmaganda Telegram'dan oqim) ----
   app.get("/media/reel/:id", async (req, reply) => {
+    if (rateLimit("media:" + req.ip, 60, 60_000)) return reply.code(429).send("too many requests");
     const id = Number((req.params as { id: string }).id);
     const content = await prisma.content.findFirst({ where: { id, status: "published" } });
     if (!content?.reelFileId) return reply.code(404).send("not found");
